@@ -1,0 +1,40 @@
+diff --git a/firmware/fw_base.S b/firmware/fw_base.S
+index ab33e11..d7ae481 100644
+--- a/firmware/fw_base.S
++++ b/firmware/fw_base.S
+@@ -12,6 +12,7 @@
+ #include <sbi/sbi_platform.h>
+ #include <sbi/sbi_scratch.h>
+ #include <sbi/sbi_trap.h>
++#include "../../src/conf.h"
+ 
+ #define BOOT_STATUS_RELOCATE_DONE	1
+ #define BOOT_STATUS_BOOT_HART_DONE	2
+@@ -640,6 +641,16 @@ fw_platform_init:
+ 	.endif
+ .endm
+ 
++.macro GPIO012345_OFF
++        lui     a5,0x10060
++        addi    a5,a5,12
++        lw      a7,0(a5)
++        sext.w  a6,a7
++        andi    a6,a6,-0x40
++        sext.w  a6,a6
++        sw      a6,0(a5)
++.endm
++        
+ .macro TRAP_RESTORE_SP_T0
+ 	/* Restore T0 */
+ 	REG_L	t0, SBI_TRAP_REGS_OFFSET(t0)(sp)
+@@ -674,6 +685,10 @@ _trap_handler:
+ _trap_exit:
+ 	add	sp, a0, zero
+ 
++#ifdef CALC_CONTEXT_SWITCH_OVERHEAD
++        GPIO012345_OFF
++#endif
++
+ 	TRAP_RESTORE_GENERAL_REGS_EXCEPT_SP_T0
+ 
+ 	TRAP_RESTORE_MEPC_MSTATUS 0

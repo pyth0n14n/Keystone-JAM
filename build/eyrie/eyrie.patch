@@ -1,0 +1,114 @@
+diff --git a/sbi.c b/sbi.c
+index ead4206..142c304 100644
+--- a/sbi.c
++++ b/sbi.c
+@@ -1,4 +1,5 @@
+ #include "sbi.h"
++#include "conf.h"
+ 
+ #include "vm_defs.h"
+ 
+@@ -26,53 +27,103 @@
+ #define SBI_CALL_3(___ext, ___which, ___arg0, ___arg1, ___arg2) \
+   SBI_CALL(___ext, ___which, ___arg0, ___arg1, ___arg2)
+ 
++#ifdef JAM
++// JAM: 22-10-24
++volatile uintptr_t
++sbi_ecall_wrapper(uintptr_t ext, uintptr_t which, uintptr_t arg0, uintptr_t arg1, uintptr_t arg2) {
++  return SBI_CALL(ext, which, arg0, arg1, arg2);
++}
++#endif
++
+ void
+ sbi_putchar(char character) {
++#ifdef JAM
++  sbi_ecall_wrapper(SBI_CONSOLE_PUTCHAR, 0, character, 0, 0);
++#else
+   SBI_CALL_1(SBI_CONSOLE_PUTCHAR, 0, character);
++#endif
+ }
+ 
+ void
+ sbi_set_timer(uint64_t stime_value) {
+ #if __riscv_xlen == 32
++  #ifdef JAM
++  sbi_ecall_wrapper(SBI_SET_TIMER, 0, stime_value, stime_value >> 32, 0);
++  #else
+   SBI_CALL_2(SBI_SET_TIMER, 0, stime_value, stime_value >> 32);
++  #endif
+ #else
++  #ifdef JAM
++  sbi_ecall_wrapper(SBI_SET_TIMER, 0, stime_value, 0, 0);
++  #else
+   SBI_CALL_1(SBI_SET_TIMER, 0, stime_value);
++  #endif
+ #endif
+ }
+ 
+ uintptr_t
+ sbi_stop_enclave(uint64_t request) {
++#ifdef JAM
++  return sbi_ecall_wrapper(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE, SBI_SM_STOP_ENCLAVE, request, 0, 0);
++#else
+   return SBI_CALL_1(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE, SBI_SM_STOP_ENCLAVE, request);
++#endif
+ }
+ 
+ void
+ sbi_exit_enclave(uint64_t retval) {
++#ifdef JAM
++  sbi_ecall_wrapper(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE, SBI_SM_EXIT_ENCLAVE, retval, 0, 0);
++#else
+   SBI_CALL_1(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE, SBI_SM_EXIT_ENCLAVE, retval);
++#endif
+ }
+ 
+ uintptr_t
+ sbi_random() {
++#ifdef JAM
++  return sbi_ecall_wrapper(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE, SBI_SM_RANDOM, 0, 0, 0);
++#else
+   return SBI_CALL_0(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE, SBI_SM_RANDOM);
++#endif
+ }
+ 
+ uintptr_t
+ sbi_query_multimem() {
++#ifdef JAM
++  return sbi_ecall_wrapper(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE,
++      SBI_SM_CALL_PLUGIN, SM_MULTIMEM_PLUGIN_ID, SM_MULTIMEM_CALL_GET_SIZE, 0);
++#else
+   return SBI_CALL_2(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE,
+       SBI_SM_CALL_PLUGIN, SM_MULTIMEM_PLUGIN_ID, SM_MULTIMEM_CALL_GET_SIZE);
++#endif
+ }
+ 
+ uintptr_t
+ sbi_query_multimem_addr() {
++#ifdef JAM
++  return sbi_ecall_wrapper(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE,
++      SBI_SM_CALL_PLUGIN, SM_MULTIMEM_PLUGIN_ID, SM_MULTIMEM_CALL_GET_ADDR, 0);
++#else
+   return SBI_CALL_2(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE,
+       SBI_SM_CALL_PLUGIN, SM_MULTIMEM_PLUGIN_ID, SM_MULTIMEM_CALL_GET_ADDR);
++#endif
+ }
+ 
+ uintptr_t
+ sbi_attest_enclave(void* report, void* buf, uintptr_t len) {
++#ifdef JAM
++  return sbi_ecall_wrapper(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE, SBI_SM_ATTEST_ENCLAVE, (uintptr_t)report, (uintptr_t)buf, len);
++#else
+   return SBI_CALL_3(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE, SBI_SM_ATTEST_ENCLAVE, report, buf, len);
++#endif
+ }
+ 
+ uintptr_t
+ sbi_get_sealing_key(uintptr_t key_struct, uintptr_t key_ident, uintptr_t len) {
++#ifdef JAM
++  return sbi_ecall_wrapper(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE, SBI_SM_GET_SEALING_KEY, key_struct, key_ident, len);
++#else
+   return SBI_CALL_3(SBI_EXT_EXPERIMENTAL_KEYSTONE_ENCLAVE, SBI_SM_GET_SEALING_KEY, key_struct, key_ident, len);
++#endif
+ }

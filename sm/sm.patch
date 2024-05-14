@@ -1,0 +1,1541 @@
+diff --git a/plat/generic/objects.mk b/plat/generic/objects.mk
+index b1a9936..2f85244 100644
+--- a/plat/generic/objects.mk
++++ b/plat/generic/objects.mk
+@@ -5,6 +5,9 @@ else
+   platform-genflags-y += "-DTARGET_PLATFORM_HEADER=\"platform/generic/platform.h\""
+ endif
+ 
++platform-objs-y += ../../src/ascon.o
++platform-objs-y += ../../src/aes.o
++platform-objs-y += ../../src/jam.o
+ platform-objs-y += ../../src/attest.o
+ platform-objs-y += ../../src/cpu.o
+ platform-objs-y += ../../src/crypto.o
+diff --git a/plat/sifive/fu540/objects.mk b/plat/sifive/fu540/objects.mk
+index d95ef6e..60e8f73 100644
+--- a/plat/sifive/fu540/objects.mk
++++ b/plat/sifive/fu540/objects.mk
+@@ -10,6 +10,9 @@ PLATFORM = sifive/fu540
+ KEYSTONE_SM_REL=../../../
+ platform-genflags-y += "-DTARGET_PLATFORM_HEADER=\"platform/$(PLATFORM)/platform.h\""
+ 
++platform-objs-y += $(KEYSTONE_SM_REL)src/ascon.o
++platform-objs-y += $(KEYSTONE_SM_REL)src/aes.o
++platform-objs-y += $(KEYSTONE_SM_REL)src/jam.o
+ platform-objs-y += $(KEYSTONE_SM_REL)src/attest.o
+ platform-objs-y += $(KEYSTONE_SM_REL)src/cpu.o
+ platform-objs-y += $(KEYSTONE_SM_REL)src/crypto.o
+diff --git a/src/aes.c b/src/aes.c
+index 8ffc3c5..3aed11e 100644
+--- a/src/aes.c
++++ b/src/aes.c
+@@ -577,4 +577,4 @@ void AES_CTR_xcrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length)
+ }
+ 
+ #endif // #if defined(CTR) && (CTR == 1)
+-
++#endif // #ifdef MEM_ENC
+diff --git a/src/aes.h b/src/aes.h
+index d9285cd..835a368 100644
+--- a/src/aes.h
++++ b/src/aes.h
+@@ -12,13 +12,14 @@
+ // ECB enables the basic ECB 16-byte block algorithm. All can be enabled simultaneously.
+ 
+ // The #ifndef-guard allows it to be configured before #include'ing or at compile time.
+-#ifndef CBC
+-  #define CBC 1
+-#endif
++// #ifndef CBC
++//   #define CBC 1
++// #endif
+ 
+-#ifndef ECB
+-  #define ECB 1
+-#endif
++// #ifndef ECB
++//   #define ECB 1
++// #endif
++#ifdef MEM_ENC
+ 
+ #ifndef CTR
+   #define CTR 1
+@@ -88,5 +89,5 @@ void AES_CTR_xcrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, size_t length);
+ 
+ #endif // #if defined(CTR) && (CTR == 1)
+ 
+-
++#endif // #ifdef MEM_ENC
+ #endif // _AES_H_
+diff --git a/src/ascon.c b/src/ascon.c
+index 89f3b1d..0805754 100644
+--- a/src/ascon.c
++++ b/src/ascon.c
+@@ -26,17 +26,14 @@ int crypto_aead_encrypt(unsigned char* c, unsigned long long* clen,
+   s.x[2] = K1;
+   s.x[3] = N0;
+   s.x[4] = N1;
+-  printstate("init 1st key xor", &s);
+   P12(&s);
+   s.x[3] ^= K0;
+   s.x[4] ^= K1;
+-  printstate("init 2nd key xor", &s);
+ 
+   if (adlen) {
+     /* full associated data blocks */
+     while (adlen >= ASCON_128_RATE) {
+       s.x[0] ^= LOADBYTES(ad, 8);
+-      printstate("absorb adata", &s);
+       P6(&s);
+       ad += ASCON_128_RATE;
+       adlen -= ASCON_128_RATE;
+@@ -44,18 +41,15 @@ int crypto_aead_encrypt(unsigned char* c, unsigned long long* clen,
+     /* final associated data block */
+     s.x[0] ^= LOADBYTES(ad, adlen);
+     s.x[0] ^= PAD(adlen);
+-    printstate("pad adata", &s);
+     P6(&s);
+   }
+   /* domain separation */
+   s.x[4] ^= 1;
+-  printstate("domain separation", &s);
+ 
+   /* full plaintext blocks */
+   while (mlen >= ASCON_128_RATE) {
+     s.x[0] ^= LOADBYTES(m, 8);
+     STOREBYTES(c, s.x[0], 8);
+-    printstate("absorb plaintext", &s);
+     P6(&s);
+     m += ASCON_128_RATE;
+     c += ASCON_128_RATE;
+@@ -66,16 +60,13 @@ int crypto_aead_encrypt(unsigned char* c, unsigned long long* clen,
+   STOREBYTES(c, s.x[0], mlen);
+   s.x[0] ^= PAD(mlen);
+   c += mlen;
+-  printstate("pad plaintext", &s);
+ 
+   /* finalize */
+   s.x[1] ^= K0;
+   s.x[2] ^= K1;
+-  printstate("final 1st key xor", &s);
+   P12(&s);
+   s.x[3] ^= K0;
+   s.x[4] ^= K1;
+-  printstate("final 2nd key xor", &s);
+ 
+   /* set tag */
+   STOREBYTES(c, s.x[3], 8);
+@@ -109,17 +100,14 @@ int crypto_aead_decrypt(unsigned char* m, unsigned long long* mlen,
+   s.x[2] = K1;
+   s.x[3] = N0;
+   s.x[4] = N1;
+-  printstate("init 1st key xor", &s);
+   P12(&s);
+   s.x[3] ^= K0;
+   s.x[4] ^= K1;
+-  printstate("init 2nd key xor", &s);
+ 
+   if (adlen) {
+     /* full associated data blocks */
+     while (adlen >= ASCON_128_RATE) {
+       s.x[0] ^= LOADBYTES(ad, 8);
+-      printstate("absorb adata", &s);
+       P6(&s);
+       ad += ASCON_128_RATE;
+       adlen -= ASCON_128_RATE;
+@@ -127,12 +115,10 @@ int crypto_aead_decrypt(unsigned char* m, unsigned long long* mlen,
+     /* final associated data block */
+     s.x[0] ^= LOADBYTES(ad, adlen);
+     s.x[0] ^= PAD(adlen);
+-    printstate("pad adata", &s);
+     P6(&s);
+   }
+   /* domain separation */
+   s.x[4] ^= 1;
+-  printstate("domain separation", &s);
+ 
+   /* full ciphertext blocks */
+   clen -= CRYPTO_ABYTES;
+@@ -140,7 +126,6 @@ int crypto_aead_decrypt(unsigned char* m, unsigned long long* mlen,
+     uint64_t c0 = LOADBYTES(c, 8);
+     STOREBYTES(m, s.x[0] ^ c0, 8);
+     s.x[0] = c0;
+-    printstate("insert ciphertext", &s);
+     P6(&s);
+     m += ASCON_128_RATE;
+     c += ASCON_128_RATE;
+@@ -153,16 +138,13 @@ int crypto_aead_decrypt(unsigned char* m, unsigned long long* mlen,
+   s.x[0] |= c0;
+   s.x[0] ^= PAD(clen);
+   c += clen;
+-  printstate("pad ciphertext", &s);
+ 
+   /* finalize */
+   s.x[1] ^= K0;
+   s.x[2] ^= K1;
+-  printstate("final 1st key xor", &s);
+   P12(&s);
+   s.x[3] ^= K0;
+   s.x[4] ^= K1;
+-  printstate("final 2nd key xor", &s);
+ 
+   /* set tag */
+   uint8_t t[16];
+diff --git a/src/ascon.h b/src/ascon.h
+index 51a23ec..409ebfb 100644
+--- a/src/ascon.h
++++ b/src/ascon.h
+@@ -123,13 +123,11 @@ int crypto_aead_decrypt(unsigned char *m, unsigned long long *mlen,
+    ((uint64_t)(0x40 | ASCON_PRF_PA_ROUNDS) << 40) | \
+    ((uint64_t)(ASCON_PRF_BYTES * 8) << 32))
+ 
+-
+ // ========= ascon.h ===========
+ typedef struct {
+   uint64_t x[5];
+ } ascon_state_t;
+ 
+-
+ // ========= word.h ===========
+ typedef uint64_t uint64_t;
+ 
+@@ -160,7 +158,6 @@ static inline uint64_t CLEARBYTES(uint64_t x, int n) {
+   return x;
+ }
+ 
+-
+ // ========= round.h ===========
+ static inline uint64_t ROR(uint64_t x, int n) {
+   return x >> n | x << (-n & 63);
+@@ -170,7 +167,6 @@ static inline void ROUND(ascon_state_t* s, uint8_t C) {
+   ascon_state_t t;
+   /* addition of round constant */
+   s->x[2] ^= C;
+-  /* printstate(" round constant", s); */
+   /* substitution layer */
+   s->x[0] ^= s->x[4];
+   s->x[4] ^= s->x[3];
+@@ -186,17 +182,14 @@ static inline void ROUND(ascon_state_t* s, uint8_t C) {
+   t.x[0] ^= t.x[4];
+   t.x[3] ^= t.x[2];
+   t.x[2] = ~t.x[2];
+-  /* printstate(" substitution layer", &t); */
+   /* linear diffusion layer */
+   s->x[0] = t.x[0] ^ ROR(t.x[0], 19) ^ ROR(t.x[0], 28);
+   s->x[1] = t.x[1] ^ ROR(t.x[1], 61) ^ ROR(t.x[1], 39);
+   s->x[2] = t.x[2] ^ ROR(t.x[2], 1) ^ ROR(t.x[2], 6);
+   s->x[3] = t.x[3] ^ ROR(t.x[3], 10) ^ ROR(t.x[3], 17);
+   s->x[4] = t.x[4] ^ ROR(t.x[4], 7) ^ ROR(t.x[4], 41);
+-  printstate(" round output", s);
+ }
+ 
+-
+ // ========= permutations.h ===========
+ static inline void P12(ascon_state_t* s) {
+   ROUND(s, 0xf0);
+diff --git a/src/enclave.c b/src/enclave.c
+index 3ec9c5d..48c6d28 100644
+--- a/src/enclave.c
++++ b/src/enclave.c
+@@ -13,8 +13,30 @@
+ #include <sbi/riscv_locks.h>
+ #include <sbi/sbi_console.h>
+ 
++#include <stdint.h>
++
++#include "conf.h"  // debug print
++
++#ifdef JAM
++#include "jam.h"
++#endif
++
++#ifdef QEMU
++#define ADDR_MASK 0xc000000000000000
++#else
++#define ADDR_MASK 0x0000000c00000000
++#endif
++
++#if (defined(EXPLOIT) && !defined(QEMU)) || defined(SW_FAULT)
++int g_stop_cnt;  // to inject fault at 1st PMP reconfiguration in stop()
++#endif
++
+ #define ENCL_MAX  16
+ 
++#define GPIO_BASE_ADDR  0x10060000
++#define GPIO_OUTPUT_EN  0x10060008
++#define GPIO_OUTPUT_VAL 0x1006000C
++
+ struct enclave enclaves[ENCL_MAX];
+ #define ENCLAVE_EXISTS(eid) (eid >= 0 && eid < ENCL_MAX && enclaves[eid].state >= 0)
+ 
+@@ -50,9 +72,26 @@ static inline void context_switch_to_enclave(struct sbi_trap_regs* regs,
+   csr_write(mideleg, interrupts);
+ 
+   if(load_parameters) {
++#if defined(DEBUG_PRINT) && defined(MEM_ENC)
++    // for verification of memory encryption 2023/08/23 08:58:49
++    int i;
++    uint8_t *ptr;
++
++    sbi_printf("[context_switch_to_enclave] user_base\n");
++    ptr = (uint8_t *)(enclaves[eid].pa_params.user_base);
++    for(i = 0; i < 64; i++) {
++      if (i % 8 == 0) sbi_printf("%p: ", ptr);
++      sbi_printf("%02x ", (uint32_t)(*ptr));
++      if (i % 8 == 7) sbi_printf("\n");
++      ptr++;
++    }
++#endif
++
+     // passing parameters for a first run
+     csr_write(sepc, (uintptr_t) enclaves[eid].params.user_entry);
++#ifndef JAM
+     regs->mepc = (uintptr_t) enclaves[eid].params.runtime_entry - 4; // regs->mepc will be +4 before sbi_ecall_handler return
++#endif
+     regs->mstatus = (1 << MSTATUS_MPP_SHIFT);
+     // $a1: (PA) DRAM base,
+     regs->a1 = (uintptr_t) enclaves[eid].pa_params.dram_base;
+@@ -78,9 +117,14 @@ static inline void context_switch_to_enclave(struct sbi_trap_regs* regs,
+   // set PMP
+   osm_pmp_set(PMP_NO_PERM);
+   int memid;
++
+   for(memid=0; memid < ENCLAVE_REGIONS_MAX; memid++) {
+     if(enclaves[eid].regions[memid].type != REGION_INVALID) {
+-      pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_ALL_PERM);
++#if (defined(DUPL) || defined(RND_DELAY))
++        pmp_my_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_ALL_PERM);
++#else
++        pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_ALL_PERM);
++#endif
+     }
+   }
+ 
+@@ -95,9 +139,24 @@ static inline void context_switch_to_host(struct sbi_trap_regs *regs,
+ 
+   // set PMP
+   int memid;
++  /* uint32_t val; */
+   for(memid=0; memid < ENCLAVE_REGIONS_MAX; memid++) {
+     if(enclaves[eid].regions[memid].type != REGION_INVALID) {
+-      pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_NO_PERM);
++
++#if (defined(EXPLOIT) && !defined(QEMU)) || defined(SW_FAULT)
++      if (enclaves[eid].regions[memid].pmp_rid == 2 && g_stop_cnt == 0) {
++        pmp_my_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_NO_PERM);
++      }
++      else {
++#endif
++#if (defined(DUPL) || defined(RND_DELAY))
++        pmp_my_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_NO_PERM);
++#else
++        pmp_set_keystone(enclaves[eid].regions[memid].pmp_rid, PMP_NO_PERM);
++#endif
++#if (defined(EXPLOIT) && !defined(QEMU)) || defined(SW_FAULT)
++      }
++#endif
+     }
+   }
+   osm_pmp_set(PMP_ALL_PERM);
+@@ -128,7 +187,16 @@ static inline void context_switch_to_host(struct sbi_trap_regs *regs,
+   }
+ 
+   // Reconfigure platform specific defenses
+-  platform_switch_from_enclave(&(enclaves[eid]));
++#ifdef EXPLOIT_ENC
++  if (g_stop_cnt == 0) {
++    // Attacking MEM-ENC
++    platform_switch_from_enclave_exploit(&(enclaves[eid]));
++  } else {
++#endif
++    platform_switch_from_enclave(&(enclaves[eid]));
++#ifdef EXPLOIT_ENC
++  }
++#endif
+ 
+   cpu_exit_enclave_context();
+ 
+@@ -398,6 +466,9 @@ unsigned long create_enclave(unsigned long *eidptr, struct keystone_sbi_create c
+   enclaves[eid].n_thread = 0;
+   enclaves[eid].params = params;
+   enclaves[eid].pa_params = pa_params;
++#ifdef JAM
++  enclaves[eid].ped.happ_entry = create_args.happ_entry;
++#endif
+ 
+   /* Init enclave state (regs etc) */
+   clean_state(&enclaves[eid].threads[0]);
+@@ -420,6 +491,23 @@ unsigned long create_enclave(unsigned long *eidptr, struct keystone_sbi_create c
+   *eidptr = eid;
+ 
+   spin_unlock(&encl_lock);
++#ifdef DEBUG_PRINT
++  sbi_printf("[create enclave]\n");
++  sbi_printf("  pa_params.dram_base:      0x%lx\n", pa_params.dram_base);
++  sbi_printf("  pa_params.dram_size:      0x%lx\n", pa_params.dram_size);
++  sbi_printf("  pa_params.runtime_base:   0x%lx\n", pa_params.runtime_base);
++  sbi_printf("  pa_params.user_base:      0x%lx\n", pa_params.user_base);
++  sbi_printf("  pa_params.free_base:      0x%lx\n", pa_params.free_base);
++  sbi_printf("\n");
++  sbi_printf("  va_params.runtime_entry:  0x%lx\n", params.runtime_entry);
++  sbi_printf("  va_params.user_entry:     0x%lx\n", params.user_entry);
++  sbi_printf("  va_params.untrusted_ptr:  0x%lx\n", params.untrusted_ptr);
++  sbi_printf("  va_params.untrusted_size: 0x%lx\n", params.untrusted_size);
++#ifdef JAM
++  sbi_printf("  happ_entry:               0x%lx\n", enclaves[eid].ped.happ_entry);
++#endif
++#endif
++
+   return SBI_ERR_SM_ENCLAVE_SUCCESS;
+ 
+ unlock:
+@@ -525,6 +613,16 @@ unsigned long run_enclave(struct sbi_trap_regs *regs, enclave_id eid)
+   // Enclave is OK to run, context switch to it
+   context_switch_to_enclave(regs, eid, 1);
+ 
++#ifdef JAM
++  uintptr_t data[3] = {0};
++  data[0] = enclaves[eid].ped.happ_entry;
++  data[1] = csr_read(pmpcfg0);
++  data[2] = csr_read(pmpaddr7) & ADDR_MASK;
++  regs->mepc = unmasked_jump_addr(data, 1, 0);
++#else
++  regs->mepc += 4;
++#endif
++
+   return SBI_ERR_SM_ENCLAVE_SUCCESS;
+ }
+ 
+@@ -546,6 +644,16 @@ unsigned long exit_enclave(struct sbi_trap_regs *regs, enclave_id eid)
+ 
+   context_switch_to_host(regs, eid, 0);
+ 
++#ifdef JAM
++  uintptr_t data[3] = {0};
++  data[0] = enclaves[eid].params.user_entry;
++  data[1] = csr_read(pmpcfg0);
++  data[2] = csr_read(pmpaddr7) & ADDR_MASK;
++  regs->mepc = unmasked_jump_addr(data, 0, 1);
++#else
++  regs->mepc += 4;
++#endif
++
+   return SBI_ERR_SM_ENCLAVE_SUCCESS;
+ }
+ 
+@@ -567,6 +675,73 @@ unsigned long stop_enclave(struct sbi_trap_regs *regs, uint64_t request, enclave
+ 
+   context_switch_to_host(regs, eid, request == STOP_EDGE_CALL_HOST);
+ 
++#ifdef JAM
++  uintptr_t data[3] = {0};
++#ifdef EXPLOIT_UNMASK
++  if (g_stop_cnt == 0) {
++    // Trigger on & 64 NOPs (GPIO0 on-off & GPIO1 on)
++    asm volatile(
++    "lui    a5,0x10060;"                                     \
++    "addi   a5,a5,12;"                                       \
++    "lw     a5,0(a5);"                                       \
++    "sext.w a6,a5;"                                          \
++    "lui    a5,0x10060;"                                     \
++    "addi   a5,a5,12;"                                       \
++    "ori    a6,a6,3;"                                        \
++    "sext.w a6,a6;"                                          \
++    "sw     a6,0(a5);"                                       \
++    "lui    a5,0x10060;"                                     \
++    "addi   a5,a5,12;"                                       \
++    "lw     a5,0(a5);"                                       \
++    "sext.w a6,a5;"                                          \
++    "lui    a5,0x10060;"                                     \
++    "addi   a5,a5,12;"                                       \
++    "andi   a6,a6,-2;"                                       \
++    "sext.w a6,a6;"                                          \
++    "sw     a6,0(a5);"                                       \
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    :::"a5", "a6");
++    data[0] = enclaves[eid].params.user_entry;
++    data[1] = csr_read(pmpcfg0);
++    data[2] = csr_read(pmpaddr7) & ADDR_MASK;
++    regs->mepc = unmasked_jump_addr(data, 0, 1);
++    // 64 NOPs & Trigger off (GPIO1 off)
++    asm volatile(
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    "lui    a5,0x10060;"                                     \
++    "addi   a5,a5,12;"                                       \
++    "lw     a5,0(a5);"                                       \
++    "sext.w a6,a5;"                                          \
++    "lui    a5,0x10060;"                                     \
++    "addi   a5,a5,12;"                                       \
++    "andi   a6,a6,-3;"                                       \
++    "sext.w a6,a6;"                                          \
++    "sw     a6,0(a5);"                                       \
++    :::"a5", "a6");
++    sbi_printf("[JAM UNMASK] mepc: %lx, addr_u: %lx, cfg0: %lx, addr7: %lx\n", regs->mepc, data[0], data[1], data[2]);
++  }
++  else {
++    data[0] = enclaves[eid].params.user_entry;
++    data[1] = csr_read(pmpcfg0);
++    data[2] = csr_read(pmpaddr7) & ADDR_MASK;
++    regs->mepc = unmasked_jump_addr(data, 0, 1);
++  }
++#else
++  data[0] = enclaves[eid].params.user_entry;
++  data[1] = csr_read(pmpcfg0);
++  data[2] = csr_read(pmpaddr7) & ADDR_MASK;
++  regs->mepc = unmasked_jump_addr(data, 0, 1);
++#endif
++#else
++  regs->mepc += 4;
++#endif
++
+   switch(request) {
+     case(STOP_TIMER_INTERRUPT):
+       return SBI_ERR_SM_ENCLAVE_INTERRUPTED;
+@@ -598,6 +773,16 @@ unsigned long resume_enclave(struct sbi_trap_regs *regs, enclave_id eid)
+   // Enclave is OK to resume, context switch to it
+   context_switch_to_enclave(regs, eid, 0);
+ 
++#ifdef JAM
++  uintptr_t data[3] = {0};
++  data[0] = enclaves[eid].ped.happ_entry;
++  data[1] = csr_read(pmpcfg0);
++  data[2] = csr_read(pmpaddr7) & ADDR_MASK;
++  regs->mepc = unmasked_jump_addr(data, 1, 1);
++#else
++  regs->mepc += 4;
++#endif
++
+   return SBI_ERR_SM_ENCLAVE_SUCCESS;
+ }
+ 
+diff --git a/src/enclave.h b/src/enclave.h
+index 807f402..6f073b1 100644
+--- a/src/enclave.h
++++ b/src/enclave.h
+@@ -114,6 +114,10 @@ struct sealing_key
+ };
+ 
+ /*** SBI functions & external functions ***/
++#if (defined(EXPLOIT) && !defined(QEMU)) || defined(SW_FAULT)
++int g_stop_cnt;
++#endif
++
+ // callables from the host
+ unsigned long create_enclave(unsigned long *eid, struct keystone_sbi_create create_args);
+ unsigned long destroy_enclave(enclave_id eid);
+diff --git a/src/platform-hook.h b/src/platform-hook.h
+index c691352..cb8f0a3 100644
+--- a/src/platform-hook.h
++++ b/src/platform-hook.h
+@@ -2,6 +2,7 @@
+ #define _PLATFORM_HOOK_H_
+ 
+ #include "enclave.h"
++#include "conf.h"
+ 
+ /* These functions are defined by platform/soc specific objects,
+    defined in platform/$PLATFORM/$PLATFORM.c */
+@@ -26,6 +27,9 @@ void platform_switch_to_enclave(struct enclave* enclave);
+ 
+ /* This fires when context switching OUT of an enclave into the OS */
+ void platform_switch_from_enclave(struct enclave* enclave);
++#ifdef EXPLOIT_ENC
++void platform_switch_from_enclave_exploit(struct enclave* enclave);
++#endif
+ 
+ /* Future version: This fires when context switching from enclave A to
+    enclave B */
+diff --git a/src/platform/generic/platform.c b/src/platform/generic/platform.c
+index 16416fb..08b1701 100644
+--- a/src/platform/generic/platform.c
++++ b/src/platform/generic/platform.c
+@@ -1,5 +1,49 @@
+ /* Default platform does nothing special here */
+ #include "../../enclave.h"
++#include "../../conf.h"
++#include <sbi/sbi_console.h>
++
++// TODO: fixed iv is vulnerable.
++
++#ifdef MEM_ENC
++#ifdef MEM_ENC_ASCON
++#include "../../ascon.h"
++static const uint8_t n[CRYPTO_NPUBBYTES] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
++static const uint8_t k[CRYPTO_KEYBYTES]  = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
++
++void memenc_enclave(struct enclave* enclave, int enc) {
++  size_t size = (size_t)(enclave->pa_params.free_base - enclave->pa_params.user_base);
++  uint8_t *addr;
++  addr = (uint8_t *)enclave->pa_params.user_base; // uintptr_t
++  unsigned long long len;
++
++  if (enc == 1) {
++    crypto_aead_encrypt(addr, &len, addr, size, (void*)0, 0, (void*)0, n, k);
++    if (len != size) {
++      sbi_printf("memenc: %lld vs %ld\n", len, size);
++    }
++  } else {
++    crypto_aead_decrypt(addr, &len, (void*)0, addr, size, (void*)0, 0, n, k);
++    if (len != size) {
++      sbi_printf("memdec: %lld vs %ld\n", len, size);
++    }
++  }
++}
++#else
++#include "../../aes.h"
++void memenc_enclave(struct enclave* enclave) {
++  uint8_t iv[] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
++  uint8_t key[] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
++  struct AES_ctx ctx;
++
++  size_t size = (size_t)(enclave->pa_params.free_base - enclave->pa_params.user_base);
++  uint8_t *addr;
++  addr = (uint8_t *)enclave->pa_params.user_base; // uintptr_t
++  AES_init_ctx_iv(&ctx, key, iv);
++  AES_CTR_xcrypt_buffer(&ctx, addr, size);
++}
++#endif
++#endif
+ 
+ unsigned long platform_init_global_once(){
+   return SBI_ERR_SM_ENCLAVE_SUCCESS;
+@@ -18,16 +62,103 @@ void platform_destroy_enclave(struct enclave* enclave){
+ }
+ 
+ unsigned long platform_create_enclave(struct enclave* enclave){
++#ifdef MEM_ENC
++#ifdef MEM_ENC_ASCON
++  memenc_enclave(enclave, 1);
++#else
++  memenc_enclave(enclave);
++#endif
++
++  #ifdef DEBUG_PRINT
++  sbi_printf("[platform] create enclave\n");
++
++  sbi_printf("[platform] user_entry: %lx\n", enclave->params.user_entry);
++  sbi_printf("[platform] phys mem: %lx\n", enclave->pa_params.user_base);
++  sbi_printf("[platform] user size: %lx\n", (enclave->pa_params.free_base - enclave->pa_params.user_base));
++  #endif
++#endif
+   return SBI_ERR_SM_ENCLAVE_SUCCESS;
+ }
+ 
+ void platform_switch_to_enclave(struct enclave* enclave){
++#ifdef MEM_ENC
++#ifdef MEM_ENC_ASCON
++  memenc_enclave(enclave, 0);
++#else
++  memenc_enclave(enclave);
++#endif
++  #ifdef DEBUG_PRINT
++  sbi_printf("[platform] switch_to_enclave\n");
++  #endif
++#endif
+   return;
+ }
+ 
+ void platform_switch_from_enclave(struct enclave* enclave){
++#ifdef MEM_ENC
++#ifdef MEM_ENC_ASCON
++  memenc_enclave(enclave, 1);
++#else
++  memenc_enclave(enclave);
++#endif
++#endif
++#ifdef DEBUG_PRINT
++  sbi_printf("[platform] switch_to_host\n");
++#endif
++  return;
++}
++
++#ifdef EXPLOIT_ENC
++void platform_switch_from_enclave_exploit(struct enclave* enclave){
++  // MEMO: check ifdef EXPOIT_ENC at caller
++  // Trigger on & 64 NOPs (GPIO0 on-off & GPIO1 on)
++  asm volatile(
++    "lui    a5,0x10060;"                                     \
++    "addi   a5,a5,12;"                                       \
++    "lw     a5,0(a5);"                                       \
++    "sext.w a6,a5;"                                          \
++    "lui    a5,0x10060;"                                     \
++    "addi   a5,a5,12;"                                       \
++    "ori    a6,a6,3;"                                        \
++    "sext.w a6,a6;"                                          \
++    "sw     a6,0(a5);"                                       \
++    "lui    a5,0x10060;"                                     \
++    "addi   a5,a5,12;"                                       \
++    "lw     a5,0(a5);"                                       \
++    "sext.w a6,a5;"                                          \
++    "lui    a5,0x10060;"                                     \
++    "addi   a5,a5,12;"                                       \
++    "andi   a6,a6,-2;"                                       \
++    "sext.w a6,a6;"                                          \
++    "sw     a6,0(a5);"                                       \
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    :::"a5", "a6");
++  memenc_enclave(enclave);
++  // 64 NOPs & Trigger off (GPIO1 off)
++  asm volatile(
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    "nop;nop;nop;nop;nop;nop;nop;nop; nop;nop;nop;nop;nop;nop;nop;nop;" \
++    "lui    a5,0x10060;"                                     \
++    "addi   a5,a5,12;"                                       \
++    "lw     a5,0(a5);"                                       \
++    "sext.w a6,a5;"                                          \
++    "lui    a5,0x10060;"                                     \
++    "addi   a5,a5,12;"                                       \
++    "andi   a6,a6,-3;"                                       \
++    "sext.w a6,a6;"                                          \
++    "sw     a6,0(a5);"                                       \
++    :::"a5", "a6");
++#ifdef DEBUG_PRINT
++  sbi_printf("[platform] switch_to_host\n");
++#endif
+   return;
+ }
++#endif
+ 
+ uint64_t platform_random(){
+ #pragma message("Platform has no entropy source, this is unsafe. TEST ONLY")
+diff --git a/src/platform/generic/platform.h b/src/platform/generic/platform.h
+index f6eaab3..dd11622 100644
+--- a/src/platform/generic/platform.h
++++ b/src/platform/generic/platform.h
+@@ -1,5 +1,8 @@
++#include "../../conf.h"
+ 
+ // No special data needed for default platform
+ struct platform_enclave_data{
+-
++#ifdef JAM
++    uintptr_t happ_entry;
++#endif
+ };
+diff --git a/src/pmp.c b/src/pmp.c
+index 8d9f195..563e4b8 100644
+--- a/src/pmp.c
++++ b/src/pmp.c
+@@ -13,6 +13,11 @@
+ #include <sbi/riscv_asm.h>
+ #include <sbi/riscv_locks.h>
+ #include <sbi/riscv_atomic.h>
++#include "platform-hook.h"
++
++#include <stdint.h>
++
++#include "conf.h"
+ 
+ /* PMP global spin locks */
+ static spinlock_t pmp_lock = SPIN_LOCK_INITIALIZER;
+@@ -241,15 +246,88 @@ int pmp_set_keystone(int region_idx, uint8_t perm)
+ 
+   pmpaddr = region_pmpaddr_val(region_idx);
+ 
+-  //sbi_printf("pmp_set() [hart %d]: reg[%d], mode[%s], range[0x%lx-0x%lx], perm[0x%x]\r\n",
++  // sbi_printf("pmp_set() [hart %d]: reg[%d], mode[%s], range[0x%lx-0x%lx], perm[0x%x]\r\n",
+   //       current_hartid(), reg_idx, (region_is_tor(region_idx) ? "TOR":"NAPOT"),
+   //       region_get_addr(region_idx), region_get_addr(region_idx) + region_get_size(region_idx), perm);
+-  //sbi_printf("  pmp[%d] = pmpaddr: 0x%lx, pmpcfg: 0x%lx\r\n", reg_idx, pmpaddr, pmpcfg);
++  // sbi_printf("  pmp[%d] = pmpaddr: 0x%lx, pmpcfg: 0x%lx\r\n", reg_idx, pmpaddr, pmpcfg);
++
++  int n=reg_idx;
++
++  switch(n) {
++#define X(n,g) case n: { PMP_SET(n, g, pmpaddr, pmpcfg); break; }
++  LIST_OF_PMP_REGS
++#undef X
++    default:
++      sm_assert(FALSE);
++  }
++
++  /* TOR decoding with 2 registers */
++  if(region_needs_two_entries(region_idx))
++  {
++    n--;
++    pmpcfg = 0;
++    pmpaddr = region_get_addr(region_idx) >> 2;
++    switch(n) {
++#define X(n,g) case n: { PMP_SET(n, g, pmpaddr, pmpcfg); break; }
++  LIST_OF_PMP_REGS
++#undef X
++    default:
++      sm_assert(FALSE);
++    }
++  }
++  return SBI_ERR_SM_PMP_SUCCESS;
++}
++
++int pmp_my_set_keystone(int region_idx, uint8_t perm)
++{
++
++  if(!is_pmp_region_valid(region_idx))
++    PMP_ERROR(SBI_ERR_SM_PMP_REGION_INVALID, "Invalid PMP region index");
++
++  uint8_t perm_bits = perm & PMP_ALL_PERM;
++  pmpreg_id reg_idx = region_register_idx(region_idx);
++  uintptr_t pmpcfg = region_pmpcfg_val(region_idx, reg_idx, perm_bits);
++  uintptr_t pmpaddr;
++
++  pmpaddr = region_pmpaddr_val(region_idx);
++
++#ifdef DEBUG_PRINT
++  sbi_printf("pmp_set() [hart %d]: reg[%d], mode[%s], range[0x%lx-0x%lx], perm[0x%x]\r\n",
++        current_hartid(), reg_idx, (region_is_tor(region_idx) ? "TOR":"NAPOT"),
++        region_get_addr(region_idx), region_get_addr(region_idx) + region_get_size(region_idx), perm);
++  sbi_printf("  pmp[%d] = pmpaddr: 0x%lx, pmpcfg: 0x%lx\r\n", reg_idx, pmpaddr, pmpcfg);
++#endif
+ 
+   int n=reg_idx;
+ 
++
++#ifdef RND_DELAY
++  uint32_t rand = (uint32_t)platform_random() % 200;
++  #ifdef DEBUG_PRINT
++  sbi_printf("[RND] %d\n", rand);
++  #endif
++#endif
++
+   switch(n) {
++#ifdef EXPLOIT
++  #ifdef DUPL
++#define X(n,g) case n: { PMP_SET_FAULT_DUPL(n, g, pmpaddr, pmpcfg); break; }
++  #elif RND_DELAY
++#define X(n,g) case n: { PMP_SET_FAULT_RAND(n, g, pmpaddr, pmpcfg, rand); break; }
++  #else
++#define X(n,g) case n: { PMP_SET_FAULT(n, g, pmpaddr, pmpcfg); break; }
++  #endif
++#elif SW_FAULT
++#define X(n,g) case n: { PMP_SET_SIM_FAULT(n, g, pmpaddr, pmpcfg); break; }
++#else
++  #ifdef DUPL
++#define X(n,g) case n: { PMP_SET_DUPL(n, g, pmpaddr, pmpcfg); break; }
++  #elif RND_DELAY
++#define X(n,g) case n: { PMP_SET_RAND(n, g, pmpaddr, pmpcfg, rand); break; }
++  #else
+ #define X(n,g) case n: { PMP_SET(n, g, pmpaddr, pmpcfg); break; }
++  #endif
++#endif
+   LIST_OF_PMP_REGS
+ #undef X
+     default:
+@@ -264,6 +342,7 @@ int pmp_set_keystone(int region_idx, uint8_t perm)
+     pmpaddr = region_get_addr(region_idx) >> 2;
+     switch(n) {
+ #define X(n,g) case n: { PMP_SET(n, g, pmpaddr, pmpcfg); break; }
++// #define X(n,g) case n: { sbi_printf("[SM] TOR\n"); PMP_SET(n, g, pmpaddr, pmpcfg); break; }
+   LIST_OF_PMP_REGS
+ #undef X
+     default:
+@@ -280,6 +359,13 @@ int pmp_unset(int region_idx)
+ 
+   pmpreg_id reg_idx = region_register_idx(region_idx);
+   int n=reg_idx;
++
++#ifndef SILENT
++  sbi_printf("pmp_unset() [hart %d]: reg[%d], mode[%s], range[0x%lx-0x%lx], perm[xxx]\r\n",
++        current_hartid(), reg_idx, (region_is_tor(region_idx) ? "TOR":"NAPOT"),
++        region_get_addr(region_idx), region_get_addr(region_idx) + region_get_size(region_idx));
++#endif
++
+   switch(n) {
+ #define X(n,g) case n: { PMP_UNSET(n, g); break;}
+   LIST_OF_PMP_REGS
+diff --git a/src/pmp.h b/src/pmp.h
+index f83aeb9..e25a14f 100644
+--- a/src/pmp.h
++++ b/src/pmp.h
+@@ -7,6 +7,11 @@
+ 
+ #include "sm.h"
+ #include <sbi/riscv_atomic.h>
++#include <stdint.h>
++
++#define GPIO_BASE_ADDR  0x10060000
++#define GPIO_OUTPUT_EN  0x10060008
++#define GPIO_OUTPUT_VAL 0x1006000C
+ 
+ #define PMP_N_REG         8 //number of PMP registers
+ #define PMP_MAX_N_REGION  16 //maximum number of PMP regions
+@@ -38,6 +43,318 @@ enum pmp_priority {
+ # define PMP_PER_GROUP  4
+ #endif
+ 
++// =====================================================================
++//  No EXPLOIT (overhead evaluation etc.)
++// =====================================================================
++#define PMP_SET_DUPL(n, g, addr, pmpc) \
++{ uintptr_t oldcfg = csr_read(pmpcfg##g); \
++  pmpc |= (oldcfg & ~((uintptr_t)0xff << (uintptr_t)8*(n%PMP_PER_GROUP))); \
++  asm volatile ("la t0, 1f\n\t" \
++                "csrrw t0, mtvec, t0\n\t" \
++                "csrw pmpaddr"#n", %0\n\t" \
++                "csrw pmpaddr"#n", %0\n\t" \
++                "csrw pmpcfg"#g", %1\n\t" \
++                "csrw pmpcfg"#g", %1\n\t" \
++                "sfence.vma\n\t"\
++                ".align 2\n\t" \
++                "1: csrw mtvec, t0 \n\t" \
++                : : "r" (addr), "r" (pmpc) : "t0"); \
++}
++
++#define PMP_SET_RAND(n, g, addr, pmpc, rand) \
++{ uintptr_t oldcfg = csr_read(pmpcfg##g); \
++  pmpc |= (oldcfg & ~((uintptr_t)0xff << (uintptr_t)8*(n%PMP_PER_GROUP))); \
++  asm volatile ("la t0, 1f\n\t" \
++                "csrrw t0, mtvec, t0\n\t"                               \
++                : : : "t0");                                            \
++  for (; rand > 0; rand--) {                                            \
++    asm volatile("nop\n\t");                                            \
++  }                                                                     \
++  asm volatile ("csrw pmpaddr"#n", %0\n\t"                              \
++                "csrw pmpcfg"#g", %1\n\t"                               \
++                "sfence.vma\n\t"                                        \
++                ".align 2\n\t"                                          \
++                "1: csrw mtvec, t0 \n\t"                                \
++                : : "r" (addr), "r" (pmpc) : "t0");                     \
++}
++
++#define PMP_SET_READ(n, g, addr, pmpc) \
++{ uintptr_t oldcfg = csr_read(pmpcfg##g); \
++  uintptr_t pmpcfg1=0, pmpaddr1=0, pmpaddr2=0, pmpcfg2=0; \
++  pmpc |= (oldcfg & ~((uintptr_t)0xff << (uintptr_t)8*(n%PMP_PER_GROUP))); \
++  asm volatile("csrr %[paddr1], pmpaddr"#n";"                           \
++               "csrr %[pcfg1], pmpcfg"#g";"                             \
++               "la t0, 1f;"                                             \
++               "csrrw t0, mtvec, t0;"                                   \
++               :[pcfg1]"=r"(pmpcfg1),[paddr1]"=r"(pmpaddr1));           \
++  asm volatile("csrw pmpaddr"#n", %0;"                                  \
++               "csrw pmpcfg"#g", %1;"                                   \
++               ::"r" (addr), "r" (pmpc):);                              \
++  asm volatile("sfence.vma;"                                            \
++               ".align 2;"                                              \
++               "1: csrw mtvec, t0;"                                     \
++               "csrr %[paddr2], pmpaddr"#n";"                           \
++               "csrr %[pcfg2], pmpcfg"#g";"                             \
++               :[pcfg2]"=r"(pmpcfg2),[paddr2]"=r"(pmpaddr2));           \
++  sbi_printf("addr(%lx)->(%lx) cfg(%lx)->(%lx)\n", pmpaddr1, pmpaddr2, pmpcfg1, pmpcfg2); \
++}
++
++// =====================================================================
++//  For EXPLOIT
++// =====================================================================
++// Simple PMP_SET (for MEM_ENC & JAM)
++#define PMP_SET_FAULT(n, g, addr, pmpc) \
++{ uintptr_t oldcfg = csr_read(pmpcfg##g); \
++  uintptr_t t1=0, t2=0, t3=0, t4=0, t5=0, pmpcfg1=0, pmpaddr1=0, pmpaddr2=0, pmpcfg2=0; \
++  pmpc |= (oldcfg & ~((uintptr_t)0xff << (uintptr_t)8*(n%PMP_PER_GROUP))); \
++  asm volatile("li t1, 0;"                                              \
++               "li t2, 0;"                                              \
++               "li t3, 0;"                                              \
++               "li t4, 0;"                                              \
++               "li t5, 0;"                                              \
++               "csrr %[paddr1], pmpaddr"#n";"                           \
++               "csrr %[pcfg1], pmpcfg"#g";"                             \
++               "la t0, 1f;"                                             \
++               "csrrw t0, mtvec, t0;"                                   \
++               "lui    a5,0x10060;"                                     \
++               "addi   a5,a5,12;"                                       \
++               "lw     a5,0(a5);"                                       \
++               "sext.w a6,a5;"                                          \
++               "lui    a5,0x10060;"                                     \
++               "addi   a5,a5,12;"                                       \
++               "ori    a6,a6,3;"                                        \
++               "sext.w a6,a6;"                                          \
++               "sw     a6,0(a5);"                                       \
++               "lui    a5,0x10060;"                                     \
++               "addi   a5,a5,12;"                                       \
++               "lw     a5,0(a5);"                                       \
++               "sext.w a6,a5;"                                          \
++               "lui    a5,0x10060;"                                     \
++               "addi   a5,a5,12;"                                       \
++               "andi   a6,a6,-2;"                                       \
++               "sext.w a6,a6;"                                          \
++               "sw     a6,0(a5);"                                       \
++               "nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;" \
++               "nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;"       \
++               "addi t1,t1,0x1;  addi t1,t1,0x2;  addi t1,t1,0x4;  addi t1,t1,0x8;" \
++               "addi t1,t1,0x10; addi t1,t1,0x20; addi t1,t1,0x40; addi t1,t1,0x80;" \
++               "addi t1,t1,0x100; addi t1,t1,0x200; addi t1,t1,0x400;"  \
++               "addi t2,t2,0x1;  addi t2,t2,0x2;  addi t2,t2,0x4;  addi t2,t2,0x8;" \
++               "addi t2,t2,0x10; addi t2,t2,0x20; addi t2,t2,0x40; addi t2,t2,0x80;" \
++               "addi t2,t2,0x100; addi t2,t2,0x200; addi t2,t2,0x400;"  \
++               "addi t3,t3,0x1;  addi t3,t3,0x2;  addi t3,t3,0x4;  addi t3,t3,0x8;" \
++               "addi t3,t3,0x10; addi t3,t3,0x20; addi t3,t3,0x40; addi t3,t3,0x80;" \
++               "addi t3,t3,0x100; addi t3,t3,0x200; addi t3,t3,0x400;"  \
++               :[t1]"=r"(t1),[t2]"=r"(t2),[t3]"=r"(t3),[t4]"=r"(t4),[t5]"=r"(t5),[pcfg1]"=r"(pmpcfg1),[paddr1]"=r"(pmpaddr1) \
++               ::"t0", "t1", "t2", "t3", "t4", "t5", "a5", "a6");       \
++  asm volatile("csrw pmpaddr"#n", %0;"                                  \
++               "csrw pmpcfg"#g", %1;"                                   \
++               ::"r" (addr), "r" (pmpc):);                              \
++  asm volatile("addi t4,t4,0x1;  addi t4,t4,0x2;  addi t4,t4,0x4;  addi t4,t4,0x8;" \
++               "addi t4,t4,0x10; addi t4,t4,0x20; addi t4,t4,0x40; addi t4,t4,0x80;" \
++               "addi t4,t4,0x100; addi t4,t4,0x200; addi t4,t4,0x400;"  \
++               "addi t5,t5,0x1;  addi t5,t5,0x2;  addi t5,t5,0x4;  addi t5,t5,0x8;" \
++               "addi t5,t5,0x10; addi t5,t5,0x20; addi t5,t5,0x40; addi t5,t5,0x80;" \
++               "addi t5,t5,0x100; addi t5,t5,0x200; addi t5,t5,0x400;"  \
++               "lui    a5,0x10060;"                                     \
++               "addi   a5,a5,12;"                                       \
++               "lw     a5,0(a5);"                                       \
++               "sext.w a6,a5;"                                          \
++               "lui    a5,0x10060;"                                     \
++               "addi   a5,a5,12;"                                       \
++               "andi   a6,a6,-3;"                                       \
++               "sext.w a6,a6;"                                          \
++               "sw     a6,0(a5);"                                       \
++               "sfence.vma;"                                            \
++               ".align 2;"                                              \
++               "1: csrw mtvec, t0;"                                     \
++               "mv %[t1], t1;"                                          \
++               "mv %[t2], t2;"                                          \
++               "mv %[t3], t3;"                                          \
++               "mv %[t4], t4;"                                          \
++               "mv %[t5], t5;"                                          \
++               "csrr %[paddr2], pmpaddr"#n";"                           \
++               "csrr %[pcfg2], pmpcfg"#g";"                             \
++               :[t1]"=r"(t1),[t2]"=r"(t2),[t3]"=r"(t3),[t4]"=r"(t4),[t5]"=r"(t5),[pcfg2]"=r"(pmpcfg2),[paddr2]"=r"(pmpaddr2) \
++               ::"t0", "t1", "t2", "t3", "t4", "t5", "a5", "a6");       \
++  sbi_printf("t1(%lu) t2(%lu) t3(%lu) addr(%lx)->(%lx) cfg(%lx)->(%lx) t4(%lu) t5(%lu)\n", t1, t2, t3, pmpaddr1, pmpaddr2, pmpcfg1, pmpcfg2, t4, t5); \
++}
++#define PMP_SET_FAULT_RAND(n, g, addr, pmpc, rand) \
++{ uintptr_t oldcfg = csr_read(pmpcfg##g); \
++  uintptr_t t1=0, t2=0, t3=0, t4=0, t5=0, pmpcfg1=0, pmpaddr1=0, pmpaddr2=0, pmpcfg2=0; \
++  pmpc |= (oldcfg & ~((uintptr_t)0xff << (uintptr_t)8*(n%PMP_PER_GROUP))); \
++  asm volatile ("li t1, 0;"                                              \
++                "li t2, 0;"                                              \
++                "li t3, 0;"                                              \
++                "li t4, 0;"                                              \
++                "li t5, 0;"                                              \
++                "csrr %[paddr1], pmpaddr"#n";"                           \
++                "csrr %[pcfg1], pmpcfg"#g";"                             \
++                "la t0, 1f;"                                             \
++                "csrrw t0, mtvec, t0;"                                   \
++                "lui    a5,0x10060;"                                     \
++                "addi   a5,a5,12;"                                       \
++                "lw     a5,0(a5);"                                       \
++                "sext.w a6,a5;"                                          \
++                "lui    a5,0x10060;"                                     \
++                "addi   a5,a5,12;"                                       \
++                "ori    a6,a6,3;"                                        \
++                "sext.w a6,a6;"                                          \
++                "sw     a6,0(a5);"                                       \
++                "lui    a5,0x10060;"                                     \
++                "addi   a5,a5,12;"                                       \
++                "lw     a5,0(a5);"                                       \
++                "sext.w a6,a5;"                                          \
++                "lui    a5,0x10060;"                                     \
++                "addi   a5,a5,12;"                                       \
++                "andi   a6,a6,-2;"                                       \
++                "sext.w a6,a6;"                                          \
++                "sw     a6,0(a5);"                                       \
++                :[t1]"=r"(t1),[t2]"=r"(t2),[t3]"=r"(t3),[t4]"=r"(t4),[t5]"=r"(t5),[pcfg1]"=r"(pmpcfg1),[paddr1]"=r"(pmpaddr1) \
++                ::"t0", "t1", "t2", "t3", "t4", "t5", "a5", "a6");       \
++  for (; rand > 0; rand--) {                                            \
++    asm volatile("nop\n\t");                                            \
++  }                                                                     \
++  asm volatile ("li t1, 0;"                                              \
++                "addi t1,t1,0x1;  addi t1,t1,0x2;  addi t1,t1,0x4;  addi t1,t1,0x8;" \
++                "addi t1,t1,0x10; addi t1,t1,0x20; addi t1,t1,0x40; addi t1,t1,0x80;" \
++                "addi t1,t1,0x100; addi t1,t1,0x200; addi t1,t1,0x400;"  \
++                "addi t2,t2,0x1;  addi t2,t2,0x2;  addi t2,t2,0x4;  addi t2,t2,0x8;" \
++                "addi t2,t2,0x10; addi t2,t2,0x20; addi t2,t2,0x40; addi t2,t2,0x80;" \
++                "addi t2,t2,0x100; addi t2,t2,0x200; addi t2,t2,0x400;"  \
++                "addi t3,t3,0x1;  addi t3,t3,0x2;  addi t3,t3,0x4;  addi t3,t3,0x8;" \
++                "addi t3,t3,0x10; addi t3,t3,0x20; addi t3,t3,0x40; addi t3,t3,0x80;" \
++                "addi t3,t3,0x100; addi t3,t3,0x200; addi t3,t3,0x400;"  \
++                :[t1]"=r"(t1),[t2]"=r"(t2),[t3]"=r"(t3),[t4]"=r"(t4),[t5]"=r"(t5) \
++                ::"t0", "t1", "t2", "t3", "t4", "t5", "a5", "a6");       \
++  asm volatile("csrw pmpaddr"#n", %0;"                                  \
++               "csrw pmpcfg"#g", %1;"                                   \
++               ::"r" (addr), "r" (pmpc):);                              \
++  asm volatile("addi t4,t4,0x1;  addi t4,t4,0x2;  addi t4,t4,0x4;  addi t4,t4,0x8;" \
++               "addi t4,t4,0x10; addi t4,t4,0x20; addi t4,t4,0x40; addi t4,t4,0x80;" \
++               "addi t4,t4,0x100; addi t4,t4,0x200; addi t4,t4,0x400;"  \
++               "addi t5,t5,0x1;  addi t5,t5,0x2;  addi t5,t5,0x4;  addi t5,t5,0x8;" \
++               "addi t5,t5,0x10; addi t5,t5,0x20; addi t5,t5,0x40; addi t5,t5,0x80;" \
++               "addi t5,t5,0x100; addi t5,t5,0x200; addi t5,t5,0x400;"  \
++               "lui    a5,0x10060;"                                     \
++               "addi   a5,a5,12;"                                       \
++               "lw     a5,0(a5);"                                       \
++               "sext.w a6,a5;"                                          \
++               "lui    a5,0x10060;"                                     \
++               "addi   a5,a5,12;"                                       \
++               "andi   a6,a6,-3;"                                       \
++               "sext.w a6,a6;"                                          \
++               "sw     a6,0(a5);"                                       \
++               "sfence.vma;"                                            \
++               ".align 2;"                                              \
++               "1: csrw mtvec, t0;"                                     \
++               "mv %[t1], t1;"                                          \
++               "mv %[t2], t2;"                                          \
++               "mv %[t3], t3;"                                          \
++               "mv %[t4], t4;"                                          \
++               "mv %[t5], t5;"                                          \
++               "csrr %[paddr2], pmpaddr"#n";"                           \
++               "csrr %[pcfg2], pmpcfg"#g";"                             \
++               :[t1]"=r"(t1),[t2]"=r"(t2),[t3]"=r"(t3),[t4]"=r"(t4),[t5]"=r"(t5),[pcfg2]"=r"(pmpcfg2),[paddr2]"=r"(pmpaddr2) \
++               ::"t0", "t1", "t2", "t3", "t4", "t5", "a5", "a6");       \
++  sbi_printf("t1(%lu) t2(%lu) t3(%lu) addr(%lx)->(%lx) cfg(%lx)->(%lx) t4(%lu) t5(%lu)\n", t1, t2, t3, pmpaddr1, pmpaddr2, pmpcfg1, pmpcfg2, t4, t5); \
++}
++
++#define PMP_SET_FAULT_DUPL(n, g, addr, pmpc) \
++{ uintptr_t oldcfg = csr_read(pmpcfg##g); \
++  uintptr_t t1=0, t2=0, t3=0, t4=0, t5=0, pmpcfg1=0, pmpaddr1=0, pmpaddr2=0, pmpcfg2=0; \
++  pmpc |= (oldcfg & ~((uintptr_t)0xff << (uintptr_t)8*(n%PMP_PER_GROUP))); \
++  asm volatile("li t1, 0;"                                              \
++               "li t2, 0;"                                              \
++               "li t3, 0;"                                              \
++               "li t4, 0;"                                              \
++               "li t5, 0;"                                              \
++               "csrr %[paddr1], pmpaddr"#n";"                           \
++               "csrr %[pcfg1], pmpcfg"#g";"                             \
++               "la t0, 1f;"                                             \
++               "csrrw t0, mtvec, t0;"                                   \
++               "lui    a5,0x10060;"                                     \
++               "addi   a5,a5,12;"                                       \
++               "lw     a5,0(a5);"                                       \
++               "sext.w a6,a5;"                                          \
++               "lui    a5,0x10060;"                                     \
++               "addi   a5,a5,12;"                                       \
++               "ori    a6,a6,3;"                                        \
++               "sext.w a6,a6;"                                          \
++               "sw     a6,0(a5);"                                       \
++               "lui    a5,0x10060;"                                     \
++               "addi   a5,a5,12;"                                       \
++               "lw     a5,0(a5);"                                       \
++               "sext.w a6,a5;"                                          \
++               "lui    a5,0x10060;"                                     \
++               "addi   a5,a5,12;"                                       \
++               "andi   a6,a6,-2;"                                       \
++               "sext.w a6,a6;"                                          \
++               "sw     a6,0(a5);"                                       \
++               "nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;" \
++               "nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;"       \
++               "addi t1,t1,0x1;  addi t1,t1,0x2;  addi t1,t1,0x4;  addi t1,t1,0x8;" \
++               "addi t1,t1,0x10; addi t1,t1,0x20; addi t1,t1,0x40; addi t1,t1,0x80;" \
++               "addi t1,t1,0x100; addi t1,t1,0x200; addi t1,t1,0x400;"  \
++               "addi t2,t2,0x1;  addi t2,t2,0x2;  addi t2,t2,0x4;  addi t2,t2,0x8;" \
++               "addi t2,t2,0x10; addi t2,t2,0x20; addi t2,t2,0x40; addi t2,t2,0x80;" \
++               "addi t2,t2,0x100; addi t2,t2,0x200; addi t2,t2,0x400;"  \
++               "addi t3,t3,0x1;  addi t3,t3,0x2;  addi t3,t3,0x4;  addi t3,t3,0x8;" \
++               "addi t3,t3,0x10; addi t3,t3,0x20; addi t3,t3,0x40; addi t3,t3,0x80;" \
++               "addi t3,t3,0x100; addi t3,t3,0x200; addi t3,t3,0x400;"  \
++               :[t1]"=r"(t1),[t2]"=r"(t2),[t3]"=r"(t3),[t4]"=r"(t4),[t5]"=r"(t5),[pcfg1]"=r"(pmpcfg1),[paddr1]"=r"(pmpaddr1) \
++               ::"t0", "t1", "t2", "t3", "t4", "t5", "a5", "a6");       \
++  asm volatile("csrw pmpaddr"#n", %0;"                                  \
++               "csrw pmpaddr"#n", %0;"                                  \
++               "csrw pmpcfg"#g", %1;"                                   \
++               "csrw pmpcfg"#g", %1;"                                   \
++               ::"r" (addr), "r" (pmpc):);                              \
++  asm volatile("addi t4,t4,0x1;  addi t4,t4,0x2;  addi t4,t4,0x4;  addi t4,t4,0x8;" \
++               "addi t4,t4,0x10; addi t4,t4,0x20; addi t4,t4,0x40; addi t4,t4,0x80;" \
++               "addi t4,t4,0x100; addi t4,t4,0x200; addi t4,t4,0x400;"  \
++               "addi t5,t5,0x1;  addi t5,t5,0x2;  addi t5,t5,0x4;  addi t5,t5,0x8;" \
++               "addi t5,t5,0x10; addi t5,t5,0x20; addi t5,t5,0x40; addi t5,t5,0x80;" \
++               "addi t5,t5,0x100; addi t5,t5,0x200; addi t5,t5,0x400;"  \
++               "lui    a5,0x10060;"                                     \
++               "addi   a5,a5,12;"                                       \
++               "lw     a5,0(a5);"                                       \
++               "sext.w a6,a5;"                                          \
++               "lui    a5,0x10060;"                                     \
++               "addi   a5,a5,12;"                                       \
++               "andi   a6,a6,-3;"                                       \
++               "sext.w a6,a6;"                                          \
++               "sw     a6,0(a5);"                                       \
++               "sfence.vma;"                                            \
++               ".align 2;"                                              \
++               "1: csrw mtvec, t0;"                                     \
++               "mv %[t1], t1;"                                          \
++               "mv %[t2], t2;"                                          \
++               "mv %[t3], t3;"                                          \
++               "mv %[t4], t4;"                                          \
++               "mv %[t5], t5;"                                          \
++               "csrr %[paddr2], pmpaddr"#n";"                           \
++               "csrr %[pcfg2], pmpcfg"#g";"                             \
++               :[t1]"=r"(t1),[t2]"=r"(t2),[t3]"=r"(t3),[t4]"=r"(t4),[t5]"=r"(t5),[pcfg2]"=r"(pmpcfg2),[paddr2]"=r"(pmpaddr2) \
++               ::"t0", "t1", "t2", "t3", "t4", "t5", "a5", "a6");       \
++  sbi_printf("t1(%lu) t2(%lu) t3(%lu) addr(%lx)->(%lx) cfg(%lx)->(%lx) t4(%lu) t5(%lu)\n", t1, t2, t3, pmpaddr1, pmpaddr2, pmpcfg1, pmpcfg2, t4, t5); \
++}
++
++// =====================================================================
++//  Others
++// =====================================================================
++#define PMP_SET_SIM_FAULT(n, g, addr, pmpc) \
++{ uintptr_t oldcfg = csr_read(pmpcfg##g); \
++  pmpc |= (oldcfg & ~((uintptr_t)0xff << (uintptr_t)8*(n%PMP_PER_GROUP))); \
++  asm volatile ("la t0, 1f\n\t" \
++                "csrrw t0, mtvec, t0\n\t" \
++                "csrw pmpaddr"#n", %0\n\t" \
++                "sfence.vma\n\t"\
++                ".align 2\n\t" \
++                "1: csrw mtvec, t0 \n\t" \
++                : : "r" (addr), "r" (pmpc) : "t0"); \
++}
++                // "csrw pmpcfg"#g", %1\n\t" 
++
+ #define PMP_SET(n, g, addr, pmpc) \
+ { uintptr_t oldcfg = csr_read(pmpcfg##g); \
+   pmpc |= (oldcfg & ~((uintptr_t)0xff << (uintptr_t)8*(n%PMP_PER_GROUP))); \
+@@ -94,6 +411,7 @@ int pmp_region_init_atomic(uintptr_t start, uint64_t size, enum pmp_priority pri
+ int pmp_region_init(uintptr_t start, uint64_t size, enum pmp_priority pri, region_id* rid, int allow_overlap);
+ int pmp_region_free_atomic(region_id region);
+ int pmp_set_keystone(region_id n, uint8_t perm);
++int pmp_my_set_keystone(region_id n, uint8_t perm);
+ int pmp_set_global(region_id n, uint8_t perm);
+ int pmp_unset(region_id n);
+ int pmp_unset_global(region_id n);
+diff --git a/src/sbi_trap_hack.c b/src/sbi_trap_hack.c
+index 8f57a05..734f81b 100644
+--- a/src/sbi_trap_hack.c
++++ b/src/sbi_trap_hack.c
+@@ -10,6 +10,7 @@
+ #include <sbi/sbi_misaligned_ldst.h>
+ #include <sbi/sbi_timer.h>
+ #include <sbi/sbi_trap.h>
++#include <sbi/sbi_platform.h>
+ 
+ static void sbi_trap_error(const char *msg, int rc,
+ 				      ulong mcause, ulong mtval, ulong mtval2,
+@@ -97,11 +98,23 @@ void sbi_trap_handler_keystone_enclave(struct sbi_trap_regs *regs)
+ 		mcause &= ~(1UL << (__riscv_xlen - 1));
+ 		switch (mcause) {
+ 		case IRQ_M_TIMER: {
+-      regs->mepc -= 4;
+-      sbi_sm_stop_enclave(regs, STOP_TIMER_INTERRUPT);
+-      regs->a0 = SBI_ERR_SM_ENCLAVE_INTERRUPTED;
+-      regs->mepc += 4;
+-			break;
++    //   regs->mepc -= 4;
++		// handle timer by myself
++		// get_cycles64
++		uint64_t cycle;
++		__asm__ __volatile__ (
++			"rdtime %0"
++			: "=r" (cycle));
++
++		uint64_t next_cycle = cycle + 10000;  // from handle_timer_interrupt() @ rt
++		sbi_platform_timer_event_start(sbi_platform_thishart_ptr(), next_cycle);
++		csr_clear(CSR_MIP, MIP_STIP);
++		csr_clear(CSR_MIP, MIP_MTIP);
++	return;
++    //   sbi_sm_stop_enclave(regs, STOP_TIMER_INTERRUPT);
++    //   regs->a0 = SBI_ERR_SM_ENCLAVE_INTERRUPTED;
++    //   regs->mepc += 4;
++	//   sbi_printf("[trap_handler_keystone] IRQ TIMER; unreachable\n");
+                       }
+ 		case IRQ_M_SOFT: {
+       regs->mepc -= 4;
+diff --git a/src/sm-sbi-opensbi.c b/src/sm-sbi-opensbi.c
+index e579fda..c6c145d 100644
+--- a/src/sm-sbi-opensbi.c
++++ b/src/sm-sbi-opensbi.c
+@@ -14,12 +14,25 @@
+ #include "sm.h"
+ #include "cpu.h"
+ 
++#include "conf.h"  // debug print
++
++#define GPIO_BASE_ADDR  0x10060000
++#define GPIO_OUTPUT_EN  0x10060008
++#define GPIO_OUTPUT_VAL 0x1006000C
++
+ static int sbi_ecall_keystone_enclave_handler(unsigned long extid, unsigned long funcid,
+                      const struct sbi_trap_regs *regs,
+                      unsigned long *out_val,
+                      struct sbi_trap_info *out_trap)
+ {
+   uintptr_t retval;
++  uintptr_t cfg, bit_mask;
++  uint8_t val;
++  int i;
++
++#ifdef DEBUG_PRINT
++  sbi_printf("[ecall_keystone_handler] extid: %lx, funcid: %ld, mepc: %lx\n", extid, funcid, regs->mepc);
++#endif
+ 
+   if (funcid <= FID_RANGE_DEPRECATED) { return SBI_ERR_SM_DEPRECATED; }
+   else if (funcid <= FID_RANGE_HOST)
+@@ -35,41 +48,106 @@ static int sbi_ecall_keystone_enclave_handler(unsigned long extid, unsigned long
+ 
+   switch (funcid) {
+     case SBI_SM_CREATE_ENCLAVE:
++      // reset PMP (make values of 1f or 18 value of 00)
++
++      cfg = csr_read(pmpcfg0);
++      bit_mask = 0;
++      for (i = 0; i < 8; i++) {
++        val = cfg & 0xff;
++        if (!(val == 0x1f || val == 0x18))
++          bit_mask |= (uint64_t)0xff << (i * 8);
++        cfg >>= 8;
++      }
++      csr_clear(pmpcfg0, bit_mask);
++
++#ifdef DEBUG_PRINT
++      sbi_printf("[sm] create\n");
++      sbi_printf("--- PMP dump ---\n");
++      sbi_printf("cfg0:  %016lx\n", csr_read(pmpcfg0));
++      sbi_printf("addr0: %016lx addr1: %016lx\n", csr_read(pmpaddr0), csr_read(pmpaddr1));
++      sbi_printf("addr2: %016lx addr3: %016lx\n", csr_read(pmpaddr2), csr_read(pmpaddr3));
++      sbi_printf("addr4: %016lx addr5: %016lx\n", csr_read(pmpaddr4), csr_read(pmpaddr5));
++      sbi_printf("addr6: %016lx addr7: %016lx\n", csr_read(pmpaddr6), csr_read(pmpaddr7));
++      sbi_printf("----------------\n");
++#endif
+       retval = sbi_sm_create_enclave(out_val, regs->a0);
+       break;
+     case SBI_SM_DESTROY_ENCLAVE:
++#ifdef DEBUG_PRINT
++      sbi_printf("[sm] destroy\n");
++#endif
+       retval = sbi_sm_destroy_enclave(regs->a0);
+       break;
+     case SBI_SM_RUN_ENCLAVE:
++#ifdef DEBUG_PRINT
++      sbi_printf("[sm] run\n");
++#endif
++#ifdef CALC_CONTEXT_SWITCH_OVERHEAD
++      (*(volatile uint32_t*)GPIO_OUTPUT_VAL) |= 0x01;  // GPIO0
++#endif
+       retval = sbi_sm_run_enclave((struct sbi_trap_regs*) regs, regs->a0);
+       __builtin_unreachable();
+       break;
+     case SBI_SM_RESUME_ENCLAVE:
++#ifdef DEBUG_PRINT
++      sbi_printf("[sm] resume\n");
++#endif
++#ifdef CALC_CONTEXT_SWITCH_OVERHEAD
++      (*(volatile uint32_t*)GPIO_OUTPUT_VAL) |= 0x02;  // GPIO1
++#endif
+       retval = sbi_sm_resume_enclave((struct sbi_trap_regs*) regs, regs->a0);
+       __builtin_unreachable();
+       break;
+     case SBI_SM_RANDOM:
++#ifdef DEBUG_PRINT
++      sbi_printf("[sm] random\n");
++#endif
+       *out_val = sbi_sm_random();
+       retval = 0;
+       break;
+     case SBI_SM_ATTEST_ENCLAVE:
++#ifdef DEBUG_PRINT
++      sbi_printf("[sm] attest\n");
++#endif
+       retval = sbi_sm_attest_enclave(regs->a0, regs->a1, regs->a2);
+       break;
+     case SBI_SM_GET_SEALING_KEY:
++#ifdef DEBUG_PRINT
++      sbi_printf("[sm] sealing\n");
++#endif
+       retval = sbi_sm_get_sealing_key(regs->a0, regs->a1, regs->a2);
+       break;
+     case SBI_SM_STOP_ENCLAVE:
++#ifdef DEBUG_PRINT
++      sbi_printf("[sm] stop\n");
++#endif
++#ifdef CALC_CONTEXT_SWITCH_OVERHEAD
++      (*(volatile uint32_t*)GPIO_OUTPUT_VAL) |= 0x04;  // GPIO2
++#endif
+       retval = sbi_sm_stop_enclave((struct sbi_trap_regs*) regs, regs->a0);
+       __builtin_unreachable();
+       break;
+     case SBI_SM_EXIT_ENCLAVE:
++#ifdef DEBUG_PRINT
++      sbi_printf("[sm] exit\n");
++#endif
++#ifdef CALC_CONTEXT_SWITCH_OVERHEAD
++      // (*(volatile uint32_t*)GPIO_OUTPUT_VAL) |= 0x08;  // GPIO3  broken 2024/02/21 08:24:22
++      (*(volatile uint32_t*)GPIO_OUTPUT_VAL) |= 0x20;  // GPIO5
++#endif
+       retval = sbi_sm_exit_enclave((struct sbi_trap_regs*) regs, regs->a0);
+       __builtin_unreachable();
+       break;
+     case SBI_SM_CALL_PLUGIN:
++#ifdef DEBUG_PRINT
++      sbi_printf("[sm] plugin\n");
++#endif
+       retval = sbi_sm_call_plugin(regs->a0, regs->a1, regs->a2, regs->a3);
+       break;
+     default:
++#ifdef DEBUG_PRINT
++      sbi_printf("[sm] not impl.\n");
++#endif
+       retval = SBI_ERR_SM_NOT_IMPLEMENTED;
+       break;
+   }
+diff --git a/src/sm-sbi.c b/src/sm-sbi.c
+index c3612ca..004cdba 100644
+--- a/src/sm-sbi.c
++++ b/src/sm-sbi.c
+@@ -12,6 +12,13 @@
+ #include <sbi/riscv_asm.h>
+ #include <sbi/sbi_console.h>
+ 
++#include "conf.h"  // debug print
++
++
++#if (defined(EXPLOIT) && !defined(QEMU)) || defined(SW_FAULT)
++extern int g_stop_cnt;
++#endif
++
+ unsigned long sbi_sm_create_enclave(unsigned long* eid, uintptr_t create_args)
+ {
+   struct keystone_sbi_create create_args_local;
+@@ -23,6 +30,11 @@ unsigned long sbi_sm_create_enclave(unsigned long* eid, uintptr_t create_args)
+     return ret;
+ 
+   ret = create_enclave(eid, create_args_local);
++
++#if (defined(EXPLOIT) && !defined(QEMU)) || defined(SW_FAULT)
++  g_stop_cnt = 0;
++#endif
++
+   return ret;
+ }
+ 
+@@ -35,8 +47,14 @@ unsigned long sbi_sm_destroy_enclave(unsigned long eid)
+ 
+ unsigned long sbi_sm_run_enclave(struct sbi_trap_regs *regs, unsigned long eid)
+ {
++  // sbi_printf("[sbi_sm_run_enclave] cfg org: %lx\n", csr_read(pmpcfg0));
++  // sbi_printf("[sbi_sm_run_enclave] mstatus: %lx\n", csr_read(CSR_MSTATUS));
+   regs->a0 = run_enclave(regs, (unsigned int) eid);
+-  regs->mepc += 4;
++#ifdef DEBUG_PRINT
++  sbi_printf("[sbi_sm_run_enclave] mepc %lx, cfg0 %lx, addr7 %lx\n", regs->mepc, csr_read(pmpcfg0), csr_read(pmpaddr7));
++#endif
++
++  // sbi_printf("[sbi_sm_run_enclave] mstatus: %lx, sstatus: %lx, mie: %lx, sie: %lx\n", csr_read(CSR_MSTATUS), csr_read(sstatus), csr_read(mie), csr_read(sie));
+   sbi_trap_exit(regs);
+   return 0;
+ }
+@@ -47,7 +65,9 @@ unsigned long sbi_sm_resume_enclave(struct sbi_trap_regs *regs, unsigned long ei
+   ret = resume_enclave(regs, (unsigned int) eid);
+   if (!regs->zero)
+     regs->a0 = ret;
+-  regs->mepc += 4;
++#ifdef DEBUG_PRINT
++  sbi_printf("[sbi_sm_resume_enclave] mepc %lx, cfg0 %lx, addr7 %lx\n", regs->mepc, csr_read(pmpcfg0), csr_read(pmpaddr7));
++#endif
+ 
+   sbi_trap_exit(regs);
+   return 0;
+@@ -55,9 +75,15 @@ unsigned long sbi_sm_resume_enclave(struct sbi_trap_regs *regs, unsigned long ei
+ 
+ unsigned long sbi_sm_exit_enclave(struct sbi_trap_regs *regs, unsigned long retval)
+ {
++  // sbi_printf("[sbi_sm_exit_enclave] cfg org: %lx\n", csr_read(pmpcfg0));
++  // sbi_printf("[sbi_sm_exit_enclave] mstatus: %lx\n", csr_read(CSR_MSTATUS));
+   regs->a0 = exit_enclave(regs, cpu_get_enclave_id());
+   regs->a1 = retval;
+-  regs->mepc += 4;
++
++#ifdef DEBUG_PRINT
++  sbi_printf("[sbi_sm_exit_enclave] mepc %lx, cfg0 %lx, addr7 %lx\n", regs->mepc, csr_read(pmpcfg0), csr_read(pmpaddr7));
++#endif
++
+   sbi_trap_exit(regs);
+   return 0;
+ }
+@@ -65,7 +91,15 @@ unsigned long sbi_sm_exit_enclave(struct sbi_trap_regs *regs, unsigned long retv
+ unsigned long sbi_sm_stop_enclave(struct sbi_trap_regs *regs, unsigned long request)
+ {
+   regs->a0 = stop_enclave(regs, request, cpu_get_enclave_id());
+-  regs->mepc += 4;
++
++#ifdef DEBUG_PRINT
++  sbi_printf("[sbi_sm_stop_enclave] mepc %lx, cfg0 %lx, addr7 %lx\n", regs->mepc, csr_read(pmpcfg0), csr_read(pmpaddr7));
++#endif
++
++#if (defined(EXPLOIT) && !defined(QEMU)) || defined(SW_FAULT)
++  g_stop_cnt++;
++#endif
++
+   sbi_trap_exit(regs);
+   return 0;
+ }
+diff --git a/src/sm.c b/src/sm.c
+index 38e7777..5f6908b 100644
+--- a/src/sm.c
++++ b/src/sm.c
+@@ -15,6 +15,8 @@
+ #include <sbi/sbi_console.h>
+ #include <sbi/sbi_hart.h>
+ 
++#include "conf.h"
++
+ static int sm_init_done = 0;
+ static int sm_region_id = 0, os_region_id = 0;
+ 
+@@ -169,6 +171,38 @@ void sm_init(bool cold_boot)
+ 
+   sbi_printf("[SM] Keystone security monitor has been initialized!\n");
+ 
++  /* PRINT implementation status */
++#ifdef DEBUG_PRINT
++  sbi_printf("[SM-custom] DEBUG PRINT on\n");
++#endif
++#ifdef QEMU
++  sbi_printf("[SM-custom] QEMU on\n");
++#endif
++#ifdef EXPLOIT
++  sbi_printf("[SM-custom] EXPLOIT on\n");
++#endif
++#ifdef EXPLOIT_UNMASK
++  sbi_printf("[SM-custom] EXPLOIT UNMASK on\n");
++#endif
++#ifdef SIM_FAULT
++  sbi_printf("[SM-custom] SIM FAULT implemented\n");
++#endif
++#ifdef JAM
++  sbi_printf("[SM-custom] JAM implemented\n");
++#endif
++#ifdef MEM_ENC
++  sbi_printf("[SM-custom] MEM ENC implemented\n");
++#endif
++#ifdef RND_DELAY
++  sbi_printf("[SM-custom] RND_DELAY implemented\n");
++#endif
++#ifdef DUPL
++  sbi_printf("[SM-custom] DUPL implemented\n");
++#endif
++#ifdef CALC_CONTEXT_SWITCH_OVERHEAD
++  sbi_printf("[SM-custom] calc CONTEXT_SWITCH through GPIO 0-3\n");
++#endif
++
+   return;
+   // for debug
+   // sm_print_cert();
+diff --git a/src/sm.h b/src/sm.h
+index 8a40feb..d59b76e 100644
+--- a/src/sm.h
++++ b/src/sm.h
+@@ -8,6 +8,7 @@
+ #include <sbi/sbi_types.h>
+ #include "pmp.h"
+ #include "sm-sbi.h"
++#include "conf.h"
+ #include <sbi/riscv_encoding.h>
+ 
+ #define SMM_BASE  0x80000000
+@@ -105,6 +106,9 @@ struct keystone_sbi_create
+   uintptr_t runtime_paddr;
+   uintptr_t user_paddr;
+   uintptr_t free_paddr;
++#ifdef JAM
++  uintptr_t happ_entry;  // vaddr
++#endif
+ 
+   struct runtime_va_params_t params;
+   unsigned int* eid_pptr;

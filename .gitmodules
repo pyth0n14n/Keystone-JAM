@@ -1,0 +1,9 @@
+[submodule "keystone"]
+	path = keystone
+	url = https://github.com/keystone-enclave/keystone
+[submodule "tiny-AES-c"]
+	path = tiny-AES-c
+	url = https://github.com/kokke/tiny-AES-c
+[submodule "ascon-c"]
+	path = ascon-c
+	url = https://github.com/ascon/ascon-c

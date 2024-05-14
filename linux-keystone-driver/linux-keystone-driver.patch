@@ -1,0 +1,85 @@
+diff --git a/keystone-ioctl.c b/keystone-ioctl.c
+index 2d44893..68fcbc0 100644
+--- a/keystone-ioctl.c
++++ b/keystone-ioctl.c
+@@ -7,6 +7,7 @@
+ #include "keystone_user.h"
+ #include <asm/sbi.h>
+ #include <linux/uaccess.h>
++#include "conf.h"
+ 
+ int __keystone_destroy_enclave(unsigned int ueid);
+ 
+@@ -70,6 +71,10 @@ int keystone_finalize_enclave(unsigned long arg)
+   create_args.runtime_paddr = enclp->runtime_paddr;
+   create_args.user_paddr = enclp->user_paddr;
+   create_args.free_paddr = enclp->free_paddr;
++#ifdef JAM
++  // vaddr for happ
++  create_args.happ_entry = (uintptr_t)(current->mm->start_code); //enclp->happ_entry;
++#endif
+ 
+   create_args.params = enclp->params;
+ 
+@@ -238,18 +243,38 @@ long keystone_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
+ 
+   switch (cmd) {
+     case KEYSTONE_IOC_CREATE_ENCLAVE:
++#ifdef DEBUG_PRINT
++      pr_info("[keystone driver] ioc create enclave\n");
++#endif
+       ret = keystone_create_enclave(filep, (unsigned long) data);
+       break;
+     case KEYSTONE_IOC_FINALIZE_ENCLAVE:
++#ifdef DEBUG_PRINT
++      pr_info("[keystone driver] ioc finalize enclave\n");
++      pr_info("[keystone driver] .text start: %x\n.text end: %x\n", current->mm->start_code, current->mm->end_code);
++      pr_info("[keystone driver] .data start: %x\n.data end: %x\n", current->mm->start_data, current->mm->end_data);
++      pr_info("[keystone driver] start brk: %x\nend brk: %x\n", current->mm->start_brk, current->mm->brk);
++      pr_info("[keystone driver] arg start: %x\narg end: %x\n", current->mm->arg_start, current->mm->arg_end);
++      pr_info("[keystone driver] env start: %x\nenv end: %x\n", current->mm->env_start, current->mm->env_end);
++#endif
+       ret = keystone_finalize_enclave((unsigned long) data);
+       break;
+     case KEYSTONE_IOC_DESTROY_ENCLAVE:
++#ifdef DEBUG_PRINT
++      pr_info("[keystone driver] ioc destroy enclave\n");
++#endif
+       ret = keystone_destroy_enclave(filep, (unsigned long) data);
+       break;
+     case KEYSTONE_IOC_RUN_ENCLAVE:
++#ifdef DEBUG_PRINT
++      pr_info("[keystone driver] ioc run enclave\n");
++#endif
+       ret = keystone_run_enclave((unsigned long) data);
+       break;
+     case KEYSTONE_IOC_RESUME_ENCLAVE:
++#ifdef DEBUG_PRINT
++      pr_info("[keystone driver] ioc resume enclave\n");
++#endif
+       ret = keystone_resume_enclave((unsigned long) data);
+       break;
+     /* Note that following commands could have been implemented as a part of ADD_PAGE ioctl.
+diff --git a/keystone-sbi.h b/keystone-sbi.h
+index 5077fd9..368058a 100644
+--- a/keystone-sbi.h
++++ b/keystone-sbi.h
+@@ -7,6 +7,7 @@
+ 
+ #include "keystone_user.h"
+ #include <asm/sbi.h>
++#include "conf.h"
+ 
+ #define KEYSTONE_SBI_EXT_ID     0x08424b45
+ #define SBI_SM_CREATE_ENCLAVE   2001
+@@ -31,6 +32,10 @@ struct keystone_sbi_create_t
+   uintptr_t runtime_paddr;
+   uintptr_t user_paddr;
+   uintptr_t free_paddr;
++#ifdef JAM
++  // happ address
++  uintptr_t happ_entry;  // vaddr
++#endif
+ 
+   // Parameters
+   struct runtime_params_t params;
