@@ -1,4 +1,4 @@
-// #define DEBUG_PRINT 1
+#define DEBUG_PRINT 1
 #define QEMU 1
 
 // #define CALC_CONTEXT_SWITCH_OVERHEAD 1

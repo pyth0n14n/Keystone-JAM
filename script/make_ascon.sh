@@ -1,5 +1,5 @@
-#!/bin/sh
-KEYSTONE_DIR="../keystone/sm"
+#!/bin/bash
+KEYSTONE_DIR="../keystone/sm/src"
 SAVE_DIR="../sm"
 ASCON_DIR="../ascon-c"
 ASCON_AEAD_DIR=$ASCON_DIR"/crypto_aead/ascon128v12/ref"

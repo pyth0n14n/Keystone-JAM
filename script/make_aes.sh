@@ -1,5 +1,5 @@
-#!/bin/sh
-KEYSTONE_DIR="../keystone/sm"
+#!/bin/bash
+KEYSTONE_DIR="../keystone/sm/src"
 SAVE_DIR="../sm"
 AES_DIR="../tiny-AES-c"
 TARGET_H="$SAVE_DIR/aes.h"

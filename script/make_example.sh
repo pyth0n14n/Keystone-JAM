@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 KEYSTONE_DIR="$PWD/../keystone"
 SAVE_DIR="$KEYSTONE_DIR/build/my-example"
 SDK_DIR="$KEYSTONE_DIR/sdk"

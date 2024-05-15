@@ -1466,7 +1466,7 @@ index c3612ca..004cdba 100644
    return 0;
  }
 diff --git a/src/sm.c b/src/sm.c
-index 38e7777..5f6908b 100644
+index 38e7777..9f7c3c7 100644
 --- a/src/sm.c
 +++ b/src/sm.c
 @@ -15,6 +15,8 @@
@@ -1495,7 +1495,7 @@ index 38e7777..5f6908b 100644
 +#ifdef EXPLOIT_UNMASK
 +  sbi_printf("[SM-custom] EXPLOIT UNMASK on\n");
 +#endif
-+#ifdef SIM_FAULT
++#ifdef SW_FAULT
 +  sbi_printf("[SM-custom] SIM FAULT implemented\n");
 +#endif
 +#ifdef JAM
