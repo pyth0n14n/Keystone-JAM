@@ -1,6 +1,6 @@
 # Keystone-JAM
 
-<!-- [English README is here](https://github.com/pyth0n14n/keystone_JAM/blob/main/README.md ) -->
+[English README is here](https://github.com/pyth0n14n/keystone_JAM/blob/main/README.md )
 
 このリポジトリは、RISC-V Keystoneにフォールトインジェクション攻撃対策を適用したものです。
 特に、TCHES'22で提案したフォールトによるTEE (Trusted Execution Environment) バイパス攻撃への対策を提供します。
@@ -48,7 +48,7 @@ SiFive Unleashedボードがあれば、実機で動作させることが可能�
 
 #### 1. 導入
 
-```
+```sh
 $ git clone github.com/pyth0n14n/keystone-JAM
 $ git submodule update --init
 ```
@@ -59,13 +59,13 @@ Keystoneをビルドする (QEMUで動作確認するところまで)。
 
 以下、公式ドキュメントより抜粋。
 初期設定
-```
+```sh
 $ cd keystone
 $ ./fast-setup.sh
 ```
 
 ビルド
-```
+```sh
 $ mkdir build
 $ cd build
 $ cmake .. -DLINUX_SIFIVE=y
@@ -77,7 +77,7 @@ $ make image
 
 #### 3. JAM適用
 パッチ適用
-```
+```sh
 $ cd script
 $ ./make_aes.sh
 $ ./make_ascon.sh
@@ -87,7 +87,7 @@ $ ./make_example.sh
 `$ ./apply_patch.sh`
 
 my-exampleのビルド&配置
-```
+```sh
 $ cd keystone/build/my-example/build
 $ cmake ..
 $ make victim
@@ -95,14 +95,14 @@ $ cp hello-native/hello-native.ke ../../overlay/root/victim.ke
 ```
 
 イメージの再ビルド
-```
+```sh
 $ cd keystone/build
 $ make
 $ make image
 ```
 
 #### 4. 実行
-```
+```sh
 $ cd keystone/build
 $ ./scripts/run-qemu.sh
 ```
@@ -290,6 +290,7 @@ JAMの説明については、下記の論文もご参照下さい。
 }
 ```
 
+---
 ## 補足
 ビルドエラー対応
 - c-stack.c
