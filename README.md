@@ -1,6 +1,6 @@
 # Keystone-JAM
 
-[日本語の README はこちら](https://github.com/pyth0n14n/keystone_JAM/blob/main/README-ja.md )
+[日本語の README はこちら](https://github.com/pyth0n14n/keystone-JAM/blob/main/README-ja.md )
 
 This repository applies fault injection attack countermeasures to RISC-V Keystone.
 Specifically, it provides countermeasures against TEE (Trusted Execution Environment) bypass attacks using fault injection, proposed at TCHES'22.
@@ -34,7 +34,7 @@ However, if you have a SiFive Unleashed board, it can be run on actual hardware.
 
 ### Software
 The toolchain and other requirements are provided by Keystone. The scripts only use shell scripts and the patch command, so no special software is required.
-However, an environment to run Keystone is necessary. For details, refer to [Keystone Build](#2-Keystone-Build).
+However, an environment to run Keystone is necessary. For details, refer to [Keystone Build](#2-build-keystone).
 
 ## Usage
 
@@ -125,7 +125,7 @@ The results of running on QEMU are as follows. Key points are:
 3. `pmp_unset() [hart 0]: reg[1], mode[NAPOT], range[0xb9200000-0xb9400000], perm[xxx]` shows that the eapp protects the physical memory range 0xb9200000-0xb9400000.
 4. The access address 0xb9210000 during verification 2 is within the eapp. Therefore, as indicated by `cause: 0000000000000005`, it is handled as a load access fault.
 5. The protection setting in the pmpcfg at that time is shown by `[sbi_sm_stop_enclave] mepc ffffffe00080435a, cfg0 1f00000000001818, addr7 ffffffffffffffff`, where cfg0 = 0x...18.. = 0b11000: AAXWR -> address matching NAPOT, XWR=000=disable.
-```sh
+```
 ./scripts/run-qemu.sh
 **** Running QEMU SSH on port 3893 ****
 overriding secure boot ROM (file: /home/nashimoto/RISCV/verify/keystone-JAM/keystone/build/bootrom.build/bootrom.bin)
@@ -146,7 +146,6 @@ OpenSBI v0.8
 [SM-custom] QEMU on
 [SM-custom] JAM implemented
 ...
-<<login process>>
 # insmod keystone-driver.ko
 # ./victim.ke  # exec w/o memory dump
 Verifying archive integrity... MD5 checksums are OK. All good.
@@ -249,6 +248,7 @@ The settings are as follows:
 | QEMU                | Enable when running on QEMU             |
 
 **Note 1: EXPLOIT uses GPIO to generate triggers, so this option will not work on QEMU.**
+
 **Note 2: Stacking multiple countermeasures has not been verified for operation.**
 
 Example: Setting to disable JAM and simulate TEE bypass attacks: QEMU, SW_FAULT (, DEBUG_PRINT)
@@ -263,7 +263,7 @@ If any part of the code was helpful, please cite it.
 For a description of JAM, please also refer to the following papers.
 
 ```bibtex
-@inproceedings{nashimoto2024,
+@inproceedings{nashimoto2024comparative,
   author={Nashimoto, Shoei and Ueno, Rei and Homma, Naofumi},
   title = {Comparative Analysis and Implementation of Jump Address Masking for Preventing TEE Bypassing Fault Attacks},
   year = {2024},
@@ -314,20 +314,22 @@ libfakeroot.c:102:50: error: ‘_STAT_VER’ undeclared (first use in this funct
 ```
 ->
 Directly edit the file (keystone/buildroot.build/build/host-fakeroot-1.25.3/libfakeroot.c) ([source](https://lists.fedoraproject.org/archives/list/devel@lists.fedoraproject.org/message/SMQ3RYXEYTVZH6PLQMKNB3NM4XLPMNZO/)).
->--- a/src/libfakechroot.h
->+++ b/src/libfakechroot.h
->@@ -224,4 +224,14 @@ int fakechroot_try_cmd_subst (char *, const char *, char *);
-> int snprintf(char *, size_t, const char *, ...);
-> #endif
->+#ifndef _STAT_VER
->+#if defined (__aarch64__)
->+#define _STAT_VER 0
->+#elif defined (__x86_64__)
->+#define _STAT_VER 1
->+#else
->+#define _STAT_VER 3
->+#endif
->+#endif
->+
-> #endif
+```
+--- a/src/libfakechroot.h
++++ b/src/libfakechroot.h
+@@ -224,4 +224,14 @@ int fakechroot_try_cmd_subst (char *, const char *, char *);
+ int snprintf(char *, size_t, const char *, ...);
+ #endif
++#ifndef _STAT_VER
++#if defined (__aarch64__)
++#define _STAT_VER 0
++#elif defined (__x86_64__)
++#define _STAT_VER 1
++#else
++#define _STAT_VER 3
++#endif
++#endif
++
+ #endif
+>>>>>>> 538cbec (update README)
 ```

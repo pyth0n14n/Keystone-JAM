@@ -1,6 +1,6 @@
 # Keystone-JAM
 
-[English README is here](https://github.com/pyth0n14n/keystone_JAM/blob/main/README.md )
+[English README is here](https://github.com/pyth0n14n/keystone-JAM/blob/main/README.md )
 
 このリポジトリは、RISC-V Keystoneにフォールトインジェクション攻撃対策を適用したものです。
 特に、TCHES'22で提案したフォールトによるTEE (Trusted Execution Environment) バイパス攻撃への対策を提供します。
@@ -73,7 +73,7 @@ $ make
 $ make image
 ```
 
-もしも、Ubuntu 22.04 LTSを使用していて、ビルドエラーが出る場合、[ビルドエラー対応](#ビルドエラー)を参照してください。
+もしも、Ubuntu 22.04 LTSを使用していて、ビルドエラーが出る場合、[ビルドエラー対応](#補足)を参照してください。
 
 #### 3. JAM適用
 パッチ適用
@@ -247,6 +247,7 @@ conf.hは4つあります：
 |QEMU | QEMU実行する場合は有効化|
 
 **注意1：EXPLOITではGPIOを使ったトリガ生成を行うため、QEMUでこのオプションを使用すると動作しません。**
+
 **注意2：対策の重ね掛けは動作検証していません。**
 
 例）JAMを無効化して、TEEバイパス攻撃を模擬する場合の設定：QEMU, SW_FAULT (, DEBUG_PRINT)
@@ -261,15 +262,7 @@ conf.hは4つあります：
 JAMの説明については、下記の論文もご参照下さい。
 
 ```bibtex
-@article{nashimoto2022bypassing,
-  title={Bypassing Isolated Execution on RISC-V using Side-Channel-Assisted Fault-Injection and Its Countermeasure},
-  author={Nashimoto, Shoei and Suzuki, Daisuke and Ueno, Rei and Homma, Naofumi},
-  journal={IACR Transactions on Cryptographic Hardware and Embedded Systems},
-  pages={28--68},
-  year={2022}
-}
-
-@inproceedings{nashimoto2024,
+@inproceedings{nashimoto2024comparative,
   author={Nashimoto, Shoei and Ueno, Rei and Homma, Naofumi},
   title = {Comparative Analysis and Implementation of Jump Address Masking for Preventing TEE Bypassing Fault Attacks},
   year = {2024},
@@ -279,6 +272,14 @@ JAMの説明については、下記の論文もご参照下さい。
   doi = {TBD},
   booktitle = {Proceedings of the 19th International Conference on Availability, Reliability and Security},
   series = {ARES '24}
+}
+
+@article{nashimoto2022bypassing,
+  title={Bypassing Isolated Execution on RISC-V using Side-Channel-Assisted Fault-Injection and Its Countermeasure},
+  author={Nashimoto, Shoei and Suzuki, Daisuke and Ueno, Rei and Homma, Naofumi},
+  journal={IACR Transactions on Cryptographic Hardware and Embedded Systems},
+  pages={28--68},
+  year={2022}
 }
 
 @online{nashimoto2024keystonejam,
@@ -312,19 +313,21 @@ libfakeroot.c:102:50: error: ‘_STAT_VER’ undeclared (first use in this funct
 ```
 ->
   ファイル(keystone/buildroot.build/build/host-fakeroot-1.25.3/libfakeroot.c)を直接編集する ([出典](https://lists.fedoraproject.org/archives/list/devel@lists.fedoraproject.org/message/SMQ3RYXEYTVZH6PLQMKNB3NM4XLPMNZO/))。
->--- a/src/libfakechroot.h
->+++ b/src/libfakechroot.h
->@@ -224,4 +224,14 @@ int fakechroot_try_cmd_subst (char *, const char *, char *);
-> int snprintf(char *, size_t, const char *, ...);
-> #endif
->+#ifndef _STAT_VER
->+#if defined (__aarch64__)
->+#define _STAT_VER 0
->+#elif defined (__x86_64__)
->+#define _STAT_VER 1
->+#else
->+#define _STAT_VER 3
->+#endif
->+#endif
->+
-> #endif
+```
+--- a/src/libfakechroot.h
++++ b/src/libfakechroot.h
+@@ -224,4 +224,14 @@ int fakechroot_try_cmd_subst (char *, const char *, char *);
+ int snprintf(char *, size_t, const char *, ...);
+ #endif
++#ifndef _STAT_VER
++#if defined (__aarch64__)
++#define _STAT_VER 0
++#elif defined (__x86_64__)
++#define _STAT_VER 1
++#else
++#define _STAT_VER 3
++#endif
++#endif
++
+ #endif
+```
