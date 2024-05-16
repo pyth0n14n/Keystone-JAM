@@ -516,7 +516,7 @@ index 3ec9c5d..48c6d28 100644
  }
  
 diff --git a/src/enclave.h b/src/enclave.h
-index 807f402..6f073b1 100644
+index 807f402..16dd4df 100644
 --- a/src/enclave.h
 +++ b/src/enclave.h
 @@ -114,6 +114,10 @@ struct sealing_key
@@ -524,7 +524,7 @@ index 807f402..6f073b1 100644
  
  /*** SBI functions & external functions ***/
 +#if (defined(EXPLOIT) && !defined(QEMU)) || defined(SW_FAULT)
-+int g_stop_cnt;
++extern int g_stop_cnt;
 +#endif
 +
  // callables from the host
