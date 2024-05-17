@@ -268,8 +268,8 @@ JAMの説明については、下記の論文もご参照下さい。
   year = {2024},
   publisher = {Association for Computing Machinery},
   address = {New York, NY, USA},
-  url = {https://doi.org/TBD},
-  doi = {TBD},
+  url = {https://doi.org/10.1145/3664476.3664477},
+  doi = {10.1145/3664476.3664477},
   booktitle = {Proceedings of the 19th International Conference on Availability, Reliability and Security},
   series = {ARES '24}
 }
